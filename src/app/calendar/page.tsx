@@ -1,0 +1,617 @@
+'use client';
+
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  Calendar as CalendarIcon,
+  Plus,
+  Clock,
+  MapPin,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Edit2,
+  Trash2,
+  AlertCircle,
+} from 'lucide-react';
+import { useLanguage } from '@/components/LanguageContext';
+import { useAuth } from '@/components/AuthContext';
+import { formatThaiDate, getTodayDateString } from '@/lib/utils';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Badge } from '@/components/ui/Badge';
+import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
+import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { CalendarEvent, FamilyMember } from '@/types';
+
+export default function CalendarPage() {
+  const { t } = useLanguage();
+  const { member } = useAuth();
+
+  const [view, setView] = useState<'day' | 'week' | 'month'>('month');
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Form State
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [eventDate, setEventDate] = useState(selectedDate);
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('10:00');
+  const [allDay, setAllDay] = useState(false);
+  const [location, setLocation] = useState('');
+  const [category, setCategory] = useState<any>('Family');
+  const [recurrenceRule, setRecurrenceRule] = useState<any>('NONE');
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const fetchEvents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/events');
+      if (res.ok) {
+        const json = await res.json();
+        setEvents(json.events || []);
+      }
+
+      const memRes = await fetch('/api/families/members');
+      if (memRes.ok) {
+        const memJson = await memRes.json();
+        setFamilyMembers(memJson.members || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const openAddModal = (dateStr?: string) => {
+    setEditingEvent(null);
+    setTitle('');
+    setDescription('');
+    setEventDate(dateStr || selectedDate);
+    setStartTime('09:00');
+    setEndTime('10:00');
+    setAllDay(false);
+    setLocation('');
+    setCategory('Family');
+    setRecurrenceRule('NONE');
+    setSelectedMembers(member ? [member.id] : []);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (evt: CalendarEvent) => {
+    setEditingEvent(evt);
+    setTitle(evt.title);
+    setDescription(evt.description || '');
+    setEventDate(evt.event_date);
+    setStartTime(evt.start_time || '09:00');
+    setEndTime(evt.end_time || '10:00');
+    setAllDay(evt.all_day === 1);
+    setLocation(evt.location || '');
+    setCategory(evt.category);
+    setRecurrenceRule(evt.recurrence_rule);
+    setSelectedMembers(evt.member_ids || []);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setFormError(null);
+
+    try {
+      const payload = {
+        id: editingEvent?.id,
+        title,
+        description,
+        eventDate,
+        startTime: allDay ? null : startTime,
+        endTime: allDay ? null : endTime,
+        allDay,
+        location,
+        category,
+        recurrenceRule,
+        memberIds: selectedMembers,
+      };
+
+      const res = await fetch('/api/events', {
+        method: editingEvent ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || t.common.errorMessage);
+      }
+
+      setIsModalOpen(false);
+      fetchEvents();
+    } catch (err: any) {
+      setFormError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    try {
+      const res = await fetch(`/api/events?id=${deletingId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDeletingId(null);
+        fetchEvents();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Filter events for selected date in Day view or check matching
+  const dayEvents = events.filter((e) => e.event_date === selectedDate || e.recurrence_rule !== 'NONE');
+
+  // Month calculations
+  const currentDate = new Date(selectedDate);
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
+
+  const prevMonth = () => {
+    const d = new Date(currentYear, currentMonth - 1, 1);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  };
+
+  const nextMonth = () => {
+    const d = new Date(currentYear, currentMonth + 1, 1);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  };
+
+  const categoryColorMap: Record<string, string> = {
+    Family: 'bg-blue-500 text-white',
+    School: 'bg-amber-500 text-white',
+    Work: 'bg-purple-500 text-white',
+    Appointment: 'bg-emerald-500 text-white',
+    Birthday: 'bg-rose-500 text-white',
+    Travel: 'bg-sky-500 text-white',
+    Health: 'bg-red-500 text-white',
+    Other: 'bg-slate-500 text-white',
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">{t.calendar.title}</h1>
+          <p className="text-xs text-muted-foreground">ปฏิทินกิจกรรมและการนัดหมายของคนในครอบครัว</p>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* View Switcher */}
+          <div className="flex items-center p-1 bg-muted rounded-2xl">
+            <button
+              onClick={() => setView('month')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                view === 'month' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+              }`}
+            >
+              {t.calendar.monthView}
+            </button>
+            <button
+              onClick={() => setView('day')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                view === 'day' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+              }`}
+            >
+              {t.calendar.dayView}
+            </button>
+          </div>
+
+          <button
+            onClick={() => openAddModal()}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{t.calendar.addEvent}</span>
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <LoadingSkeleton count={3} height="h-32" />
+      ) : (
+        <>
+          {/* Month Header Controller */}
+          <div className="bg-card text-card-foreground rounded-3xl p-4 sm:p-5 border border-border shadow-soft">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={prevMonth}
+                className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <h2 className="text-base sm:text-lg font-bold">
+                {formatThaiDate(new Date(currentYear, currentMonth, 1), { shortMonth: false, showYear: true })}
+              </h2>
+
+              <button
+                onClick={nextMonth}
+                className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Month View Grid */}
+            {view === 'month' && (
+              <div>
+                <div className="grid grid-cols-7 gap-1 text-center font-bold text-xs text-muted-foreground mb-2">
+                  <span>อา</span>
+                  <span>จ</span>
+                  <span>อ</span>
+                  <span>พ</span>
+                  <span>พฤ</span>
+                  <span>ศ</span>
+                  <span>ส</span>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                  {/* Empty days before 1st */}
+                  {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                    <div key={`empty-${i}`} className="min-h-[52px] sm:min-h-[72px] p-1 rounded-2xl bg-muted/20" />
+                  ))}
+
+                  {/* Days of current month */}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const monthStr = String(currentMonth + 1).padStart(2, '0');
+                    const dayStr = String(day).padStart(2, '0');
+                    const thisDateStr = `${currentYear}-${monthStr}-${dayStr}`;
+                    const isToday = thisDateStr === getTodayDateString();
+                    const isSelected = thisDateStr === selectedDate;
+
+                    const dayEvts = events.filter((e) => e.event_date === thisDateStr);
+
+                    return (
+                      <button
+                        key={day}
+                        onClick={() => setSelectedDate(thisDateStr)}
+                        className={`min-h-[52px] sm:min-h-[72px] p-1 sm:p-1.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                          isSelected
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary-50/40 dark:bg-primary-950/30'
+                            : isToday
+                            ? 'border-sky-400 bg-sky-50/20 dark:bg-sky-950/20'
+                            : 'border-border/50 bg-card hover:bg-muted/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full ${
+                              isToday ? 'bg-primary text-white' : 'text-foreground'
+                            }`}
+                          >
+                            {day}
+                          </span>
+                          {dayEvts.length > 0 && (
+                            <span className="hidden sm:inline-block text-[10px] font-bold text-muted-foreground">
+                              {dayEvts.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Mini event tags */}
+                        <div className="space-y-0.5 overflow-hidden">
+                          {dayEvts.slice(0, 2).map((ev) => (
+                            <div
+                              key={ev.id}
+                              className={`text-[9px] px-1 py-0.5 rounded truncate font-medium ${
+                                categoryColorMap[ev.category] || 'bg-primary text-white'
+                              }`}
+                            >
+                              {ev.title}
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Selected Date Events List */}
+          <div className="bg-card text-card-foreground rounded-3xl p-5 border border-border shadow-soft space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-base">
+                  กิจกรรมวันที่ {formatThaiDate(selectedDate, { showDayOfWeek: true })}
+                </h3>
+              </div>
+
+              <button
+                onClick={() => openAddModal(selectedDate)}
+                className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
+              >
+                <Plus className="w-3.5 h-3.5" /> เพิ่มในวันนี้
+              </button>
+            </div>
+
+            {dayEvents.length === 0 ? (
+              <EmptyState
+                icon={CalendarIcon}
+                title="ยังไม่มีกิจกรรมในวันนี้"
+                actionText="เพิ่มกิจกรรมใหม่"
+                onAction={() => openAddModal(selectedDate)}
+              />
+            ) : (
+              <div className="space-y-3">
+                {dayEvents.map((evt) => (
+                  <div
+                    key={evt.id}
+                    className="p-4 rounded-2xl bg-muted/30 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/60 transition-colors"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-2.5 h-2.5 rounded-full ${
+                            categoryColorMap[evt.category]?.split(' ')[0] || 'bg-primary'
+                          }`}
+                        />
+                        <h4 className="font-bold text-sm text-foreground truncate">{evt.title}</h4>
+                        <Badge variant="primary" size="sm">
+                          {t.calendar.categories[evt.category] || evt.category}
+                        </Badge>
+                      </div>
+
+                      {evt.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2">{evt.description}</p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
+                        <span className="flex items-center gap-1 font-semibold text-primary">
+                          <Clock className="w-3.5 h-3.5" />
+                          {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
+                        </span>
+
+                        {evt.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5" />
+                            {evt.location}
+                          </span>
+                        )}
+
+                        {evt.member_ids && evt.member_ids.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" />
+                            <div className="flex -space-x-1">
+                              {evt.member_ids.map((mid) => {
+                                const m = familyMembers.find((mem) => mem.id === mid);
+                                return m ? (
+                                  <MemberAvatar
+                                    key={m.id}
+                                    name={m.nickname}
+                                    color={m.member_color}
+                                    size="sm"
+                                  />
+                                ) : null;
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 self-end sm:self-auto">
+                      <button
+                        onClick={() => openEditModal(evt)}
+                        className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title={t.common.edit}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(evt.id)}
+                        className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        title={t.common.delete}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Add / Edit Event Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingEvent ? t.calendar.editEvent : t.calendar.addEvent}
+        maxWidth="md"
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          {formError && (
+            <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs">
+              {formError}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold mb-1">{t.calendar.eventTitle} *</label>
+            <input
+              type="text"
+              required
+              placeholder="เช่น นัดทานข้าว, ไปพบหมอ, ประชุมผู้ปกครอง"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold mb-1">{t.calendar.eventDate} *</label>
+              <input
+                type="date"
+                required
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">{t.calendar.category}</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(Object.entries(t.calendar.categories) as [string, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="allDayCheck"
+              checked={allDay}
+              onChange={(e) => setAllDay(e.target.checked)}
+              className="w-4 h-4 rounded text-primary focus:ring-primary"
+            />
+            <label htmlFor="allDayCheck" className="text-xs font-semibold select-none">
+              {t.calendar.allDay}
+            </label>
+          </div>
+
+          {!allDay && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.calendar.startTime}</label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.calendar.endTime}</label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold mb-1">{t.calendar.location}</label>
+            <input
+              type="text"
+              placeholder="เช่น ร้านอาหารบ้านสวน, โรงพยาบาลกรุงเทพ"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          {/* Member Attendees Selection */}
+          <div>
+            <label className="block text-xs font-bold mb-1.5">{t.calendar.attendees}</label>
+            <div className="flex flex-wrap gap-2">
+              {familyMembers.map((m) => {
+                const isSelected = selectedMembers.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedMembers(selectedMembers.filter((id) => id !== m.id));
+                      } else {
+                        setSelectedMembers([...selectedMembers, m.id]);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    <MemberAvatar name={m.nickname} color={m.member_color} size="sm" />
+                    <span>{m.nickname}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold mb-1">{t.calendar.description}</label>
+            <textarea
+              rows={2}
+              placeholder="รายละเอียดหรือข้อมูลเพิ่มเติม..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+            >
+              {t.common.cancel}
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all"
+            >
+              {isSaving ? t.common.saving : t.common.save}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deletingId}
+        onClose={() => setDeletingId(null)}
+        onConfirm={handleDelete}
+      />
+    </div>
+  );
+}
