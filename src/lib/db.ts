@@ -6,7 +6,8 @@ let dbInstance: Database | null = null;
 let isInitializing = false;
 let initPromise: Promise<Database> | null = null;
 
-const dbDir = path.join(process.cwd(), 'data');
+const isVercel = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const dbDir = isVercel ? '/tmp' : path.join(process.cwd(), 'data');
 const dbFilePath = process.env.DATABASE_PATH 
   ? path.resolve(process.cwd(), process.env.DATABASE_PATH)
   : path.join(dbDir, 'family_hub.db');
@@ -32,14 +33,27 @@ export async function getDb(): Promise<Database> {
 
   initPromise = (async () => {
     try {
-      const wasmBinaryPath = path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+      const candidates = [
+        path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+        path.join(process.cwd(), 'public', 'sql-wasm.wasm'),
+      ];
+
+      let wasmBinary: ArrayBuffer | undefined;
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          const fileBuf = fs.readFileSync(p);
+          wasmBinary = new Uint8Array(fileBuf).buffer;
+          break;
+        }
+      }
+
       let SQL;
-      if (fs.existsSync(wasmBinaryPath)) {
-        const fileBuf = fs.readFileSync(wasmBinaryPath);
-        const wasmBinary = new Uint8Array(fileBuf).buffer;
+      if (wasmBinary) {
         SQL = await initSqlJs({ wasmBinary });
       } else {
-        SQL = await initSqlJs();
+        SQL = await initSqlJs({
+          locateFile: () => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.wasm',
+        });
       }
 
       if (!fs.existsSync(dbDir)) {
