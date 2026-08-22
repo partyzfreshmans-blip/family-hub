@@ -12,6 +12,12 @@ import {
   Edit2,
   Trash2,
   AlertCircle,
+  Link2,
+  Copy,
+  Check,
+  Download,
+  ExternalLink,
+  Smartphone,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -25,7 +31,7 @@ import { CalendarEvent, FamilyMember } from '@/types';
 
 export default function CalendarPage() {
   const { t } = useLanguage();
-  const { member } = useAuth();
+  const { member, family } = useAuth();
 
   const [view, setView] = useState<'day' | 'week' | 'month'>('month');
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
@@ -35,6 +41,8 @@ export default function CalendarPage() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [copiedFeed, setCopiedFeed] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -193,6 +201,35 @@ export default function CalendarPage() {
     Other: 'bg-slate-500 text-white',
   };
 
+  const getGoogleCalendarUrl = (evt: CalendarEvent) => {
+    const title = encodeURIComponent(evt.title);
+    const details = encodeURIComponent(evt.description || 'กิจกรรมจาก Family Hub');
+    const loc = encodeURIComponent(evt.location || '');
+
+    let dates: string;
+    const cleanDate = evt.event_date.replace(/-/g, '');
+    if (evt.all_day || !evt.start_time) {
+      dates = `${cleanDate}/${cleanDate}`;
+    } else {
+      const cleanStartTime = evt.start_time.replace(/:/g, '') + '00';
+      const cleanEndTime = (evt.end_time ? evt.end_time.replace(/:/g, '') : cleanStartTime) + '00';
+      dates = `${cleanDate}T${cleanStartTime}/${cleanDate}T${cleanEndTime}`;
+    }
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${loc}`;
+  };
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const feedHttpsUrl = family ? `${origin}/api/calendar/feed?familyId=${family.id}` : '';
+  const feedWebcalUrl = feedHttpsUrl.replace(/^https?:\/\//, 'webcal://');
+
+  const copyFeedUrl = () => {
+    if (!feedHttpsUrl) return;
+    navigator.clipboard.writeText(feedHttpsUrl);
+    setCopiedFeed(true);
+    setTimeout(() => setCopiedFeed(false), 3000);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -202,7 +239,16 @@ export default function CalendarPage() {
           <p className="text-xs text-muted-foreground">ปฏิทินกิจกรรมและการนัดหมายของคนในครอบครัว</p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Sync Button */}
+          <button
+            onClick={() => setIsSyncModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-border bg-card hover:bg-muted text-foreground text-xs font-bold shadow-soft transition-all"
+          >
+            <Link2 className="w-4 h-4 text-primary" />
+            <span>{t.calendar.syncCalendar}</span>
+          </button>
+
           {/* View Switcher */}
           <div className="flex items-center p-1 bg-muted rounded-2xl">
             <button
@@ -422,6 +468,15 @@ export default function CalendarPage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 self-end sm:self-auto">
+                      <a
+                        href={getGoogleCalendarUrl(evt)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex items-center gap-1 text-xs font-semibold"
+                        title="เพิ่มลง Google Calendar"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
                       <button
                         onClick={() => openEditModal(evt)}
                         className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -444,6 +499,101 @@ export default function CalendarPage() {
           </div>
         </>
       )}
+
+      {/* Sync Calendar Modal */}
+      <Modal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        title={t.calendar.syncCalendar}
+      >
+        <div className="space-y-5">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t.calendar.syncDesc}
+          </p>
+
+          {/* Option 1: Apple Calendar (iPhone / iPad / Mac) */}
+          <div className="p-4 rounded-2xl border border-border bg-card hover:border-primary/50 transition-colors space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold text-lg shadow-sm">
+                🍏
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-foreground">Apple Calendar (iOS / Mac)</h4>
+                <p className="text-xs text-muted-foreground">ซิงค์แบบเรียลไทม์ผ่าน iCalendar Feed</p>
+              </div>
+            </div>
+
+            <a
+              href={feedWebcalUrl}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all text-center"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>{t.calendar.appleCalendarBtn}</span>
+            </a>
+            <p className="text-[11px] text-muted-foreground leading-normal">
+              💡 แตะปุ่มด้านบนบน iPhone หรือ Mac ➔ หน้าต่างจะเด้งขึ้นมาให้กด <strong>"สมัครรับ (Subscribe)"</strong> เพื่อให้ปฏิทินครอบครัวอัปเดตอัตโนมัติ
+            </p>
+          </div>
+
+          {/* Option 2: Google Calendar */}
+          <div className="p-4 rounded-2xl border border-border bg-card hover:border-primary/50 transition-colors space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-lg">
+                📅
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-foreground">Google Calendar (Android / PC)</h4>
+                <p className="text-xs text-muted-foreground">เพิ่มผ่านลิงก์ URL ปฏิทิน</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={feedHttpsUrl}
+                className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-border bg-background text-muted-foreground select-all focus:outline-none"
+              />
+              <button
+                onClick={copyFeedUrl}
+                className="px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-1 hover:bg-primary-600 active:scale-95 shrink-0 transition-all"
+              >
+                {copiedFeed ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedFeed ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+              </button>
+            </div>
+
+            <a
+              href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(feedHttpsUrl)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full py-2.5 px-4 rounded-xl border border-border bg-background hover:bg-muted text-foreground text-xs font-bold flex items-center justify-center gap-2 transition-all text-center"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-500" />
+              <span>{t.calendar.googleCalendarBtn} (เปิดในเว็บ)</span>
+            </a>
+            <p className="text-[11px] text-muted-foreground leading-normal">
+              💡 ใน Google Calendar: กด <strong>"เครื่องหมาย + ข้างปฏิทินอื่นๆ" ➔ "จาก URL (From URL)"</strong> แล้ววางลิงก์ที่คัดลอกไว้
+            </p>
+          </div>
+
+          {/* Option 3: Download .ics */}
+          <div className="p-3.5 rounded-2xl bg-muted/40 border border-border flex items-center justify-between">
+            <div className="text-xs">
+              <div className="font-bold text-foreground">ดาวน์โหลดไฟล์ .ics</div>
+              <div className="text-[11px] text-muted-foreground">สำหรับนำเข้าไฟล์ปฏิทินแบบออฟไลน์</div>
+            </div>
+            <a
+              href={feedHttpsUrl}
+              download={`${family?.name || 'family'}-calendar.ics`}
+              className="px-3.5 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold flex items-center gap-1.5 text-foreground transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{t.calendar.downloadIcs}</span>
+            </a>
+          </div>
+        </div>
+      </Modal>
 
       {/* Add / Edit Event Modal */}
       <Modal
