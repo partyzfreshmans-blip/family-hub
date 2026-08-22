@@ -53,6 +53,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
   const [billName, setBillName] = useState('');
   const [billAmount, setBillAmount] = useState('');
   const [billDueDate, setBillDueDate] = useState(today);
+  const [billRecurrence, setBillRecurrence] = useState('MONTHLY');
 
   const resetForms = () => {
     setActiveType('select');
@@ -135,6 +136,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
             name: billName,
             amount: billAmount,
             dueDate: billDueDate,
+            recurrenceRule: billRecurrence,
             category: 'Utilities',
           }),
         });
@@ -441,6 +443,20 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">{t.bills.recurrence}</label>
+                <select
+                  value={billRecurrence}
+                  onChange={(e) => setBillRecurrence(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {(Object.entries(t.bills.recurrenceOptions) as [string, string][]).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
