@@ -262,6 +262,58 @@ export default function CalendarPage() {
     setTimeout(() => setCopiedFeed(false), 3000);
   };
 
+  const prevDay = () => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() - 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    setSelectedDate(`${y}-${m}-${day}`);
+  };
+
+  const nextDay = () => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    setSelectedDate(`${y}-${m}-${day}`);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(getTodayDateString());
+  };
+
+  const openAddModalWithTime = (dateStr?: string, timeStr?: string) => {
+    setEditingEvent(null);
+    setTitle('');
+    setDescription('');
+    setEventDate(dateStr || selectedDate);
+    const start = timeStr || '09:00';
+    setStartTime(start);
+    const [h, m] = start.split(':').map(Number);
+    const endH = String(Math.min(23, (h || 9) + 1)).padStart(2, '0');
+    setEndTime(`${endH}:${String(m || 0).padStart(2, '0')}`);
+    setAllDay(false);
+    setLocation('');
+    setCategory('Family');
+    setRecurrenceRule('NONE');
+    setSelectedMembers(member ? [member.id] : []);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  // Timeline hours (06:00 to 23:00)
+  const timelineHours = Array.from({ length: 18 }, (_, i) => i + 6);
+  const hourHeight = 68; // px per hour slot
+  const isSelectedToday = selectedDate === getTodayDateString();
+  const currentNow = new Date();
+  const currentMinutes = currentNow.getHours() * 60 + currentNow.getMinutes();
+  const currentNowTop = ((currentMinutes - 6 * 60) / 60) * hourHeight;
+
+  const allDayDayEvents = dayEvents.filter((e) => e.all_day === 1);
+  const timedDayEvents = dayEvents.filter((e) => !e.all_day);
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -315,30 +367,41 @@ export default function CalendarPage() {
         <LoadingSkeleton count={3} height="h-32" />
       ) : (
         <>
-          {/* Month Header Controller */}
-          <div className="bg-card text-card-foreground rounded-3xl p-4 sm:p-5 border border-border shadow-soft">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={prevMonth}
-                className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+          {/* 1. MONTH VIEW */}
+          {view === 'month' && (
+            <div className="bg-card text-card-foreground rounded-3xl p-4 sm:p-5 border border-border shadow-soft space-y-4">
+              {/* Month Header Controller */}
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={prevMonth}
+                  className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
 
-              <h2 className="text-base sm:text-lg font-bold">
-                {formatThaiDate(new Date(currentYear, currentMonth, 1), { shortMonth: false, showYear: true })}
-              </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-bold">
+                    {formatThaiDate(new Date(currentYear, currentMonth, 1), { shortMonth: false, showYear: true })}
+                  </h2>
+                  {!isSelectedToday && (
+                    <button
+                      onClick={goToToday}
+                      className="px-2.5 py-1 rounded-xl text-[11px] font-bold border border-border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                    >
+                      {t.calendar.todayBtn}
+                    </button>
+                  )}
+                </div>
 
-              <button
-                onClick={nextMonth}
-                className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+                <button
+                  onClick={nextMonth}
+                  className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
 
-            {/* Month View Grid */}
-            {view === 'month' && (
+              {/* Month View Grid */}
               <div>
                 <div className="grid grid-cols-7 gap-1 text-center font-bold text-xs text-muted-foreground mb-2">
                   <span>อา</span>
@@ -412,8 +475,271 @@ export default function CalendarPage() {
                   })}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* 2. DAY VIEW (TIMELINE CHART) */}
+          {view === 'day' && (
+            <div className="bg-card text-card-foreground rounded-3xl p-4 sm:p-6 border border-border shadow-soft space-y-5">
+              {/* Day Controller */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={prevDay}
+                    className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="วันก่อนหน้า"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <span>{formatThaiDate(selectedDate, { showDayOfWeek: true })}</span>
+                    {isSelectedToday && (
+                      <Badge variant="primary" size="sm">
+                        {t.calendar.todayBtn}
+                      </Badge>
+                    )}
+                  </h2>
+
+                  <button
+                    onClick={nextDay}
+                    className="p-2 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="วันถัดไป"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  {!isSelectedToday && (
+                    <button
+                      onClick={goToToday}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold border border-border bg-muted hover:bg-muted/80 text-foreground transition-all"
+                    >
+                      {t.calendar.todayBtn}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => openAddModal(selectedDate)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-600 active:scale-95 transition-all shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{t.calendar.addEvent}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* All-Day Events Banner (if any) */}
+              {allDayDayEvents.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-muted/40 border border-border space-y-2">
+                  <div className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-primary" />
+                    <span>{t.calendar.allDayTitle} ({allDayDayEvents.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {allDayDayEvents.map((evt) => (
+                      <div
+                        key={evt.id}
+                        onClick={() => openEditModal(evt)}
+                        className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] ${
+                          categoryColorMap[evt.category] || 'bg-primary text-white'
+                        }`}
+                      >
+                        <span>{evt.title}</span>
+                        {evt.location && <span className="text-[10px] opacity-80">📍 {evt.location}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hourly Timeline Chart Component */}
+              <div className="relative border border-border/70 rounded-2xl bg-background/50 overflow-hidden select-none">
+                <div className="flex">
+                  {/* Left Column: Hour Labels */}
+                  <div className="w-16 sm:w-20 shrink-0 border-r border-border/60 bg-muted/20">
+                    {timelineHours.map((hour) => (
+                      <div
+                        key={hour}
+                        style={{ height: `${hourHeight}px` }}
+                        className="text-right pr-2.5 pt-2 text-xs font-bold text-muted-foreground select-none"
+                      >
+                        {String(hour).padStart(2, '0')}:00
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Right Column: Interactive Schedule Canvas */}
+                  <div className="relative flex-1" style={{ height: `${timelineHours.length * hourHeight}px` }}>
+                    {/* Background Hour Rows */}
+                    {timelineHours.map((hour, idx) => (
+                      <div
+                        key={hour}
+                        onClick={() => openAddModalWithTime(selectedDate, `${String(hour).padStart(2, '0')}:00`)}
+                        style={{ height: `${hourHeight}px` }}
+                        className="border-b border-border/40 hover:bg-primary/5 transition-colors cursor-pointer group relative"
+                      >
+                        {/* Half-hour subtle dotted line */}
+                        <div className="absolute left-0 right-0 top-1/2 border-b border-dashed border-border/20 pointer-events-none" />
+
+                        {/* Hover Quick Add Hint */}
+                        <div className="absolute right-3 top-2 hidden group-hover:flex items-center gap-1 text-[11px] font-bold text-primary opacity-80 bg-primary/10 px-2 py-0.5 rounded-lg pointer-events-none">
+                          <Plus className="w-3 h-3" />
+                          <span>{t.calendar.addAtHour} {String(hour).padStart(2, '0')}:00</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Current Time Red Line (if today) */}
+                    {isSelectedToday && currentNowTop >= 0 && currentNowTop <= timelineHours.length * hourHeight && (
+                      <div
+                        style={{ top: `${currentNowTop}px` }}
+                        className="absolute left-0 right-0 z-30 flex items-center pointer-events-none"
+                      >
+                        <div className="flex items-center gap-1 -ml-2">
+                          <span className="w-3.5 h-3.5 rounded-full bg-rose-500 ring-4 ring-rose-500/20 shadow-md animate-pulse" />
+                          <span className="px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-extrabold shadow-sm">
+                            {String(currentNow.getHours()).padStart(2, '0')}:{String(currentNow.getMinutes()).padStart(2, '0')}
+                          </span>
+                        </div>
+                        <div className="h-[2px] flex-1 bg-rose-500 shadow-sm" />
+                      </div>
+                    )}
+
+                    {/* Timed Event Blocks on Timeline */}
+                    {timedDayEvents.map((evt) => {
+                      const [startH, startM] = (evt.start_time || '09:00').split(':').map(Number);
+                      const [endH, endM] = (evt.end_time || `${(startH || 9) + 1}:00`).split(':').map(Number);
+
+                      const startMinutes = (startH || 9) * 60 + (startM || 0);
+                      const endMinutes = Math.max(startMinutes + 30, (endH || (startH || 9) + 1) * 60 + (endM || 0));
+
+                      const topPx = Math.max(0, ((startMinutes - 6 * 60) / 60) * hourHeight);
+                      const heightPx = Math.max(48, ((endMinutes - startMinutes) / 60) * hourHeight);
+
+                      return (
+                        <div
+                          key={evt.id}
+                          style={{
+                            top: `${topPx}px`,
+                            height: `${heightPx}px`,
+                            left: '8px',
+                            right: '8px',
+                          }}
+                          className={`absolute z-10 p-2.5 sm:p-3 rounded-2xl border shadow-sm flex flex-col justify-between overflow-hidden transition-all hover:shadow-md hover:z-20 group bg-card/95 backdrop-blur-sm ${
+                            evt.category === 'Family'
+                              ? 'border-blue-500/40 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 hover:border-blue-500'
+                              : evt.category === 'School'
+                              ? 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-orange-500/10 hover:border-amber-500'
+                              : evt.category === 'Work'
+                              ? 'border-purple-500/40 bg-gradient-to-r from-purple-500/10 to-violet-500/10 hover:border-purple-500'
+                              : evt.category === 'Appointment'
+                              ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:border-emerald-500'
+                              : evt.category === 'Birthday'
+                              ? 'border-rose-500/40 bg-gradient-to-r from-rose-500/10 to-pink-500/10 hover:border-rose-500'
+                              : evt.category === 'Health'
+                              ? 'border-red-500/40 bg-gradient-to-r from-red-500/10 to-rose-500/10 hover:border-red-500'
+                              : 'border-primary/40 bg-gradient-to-r from-primary/10 to-primary/5 hover:border-primary'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-extrabold text-foreground truncate">
+                                  {evt.title}
+                                </span>
+                                <Badge variant="primary" size="sm">
+                                  {t.calendar.categories[evt.category] || evt.category}
+                                </Badge>
+                                {evt.recurrence_rule && evt.recurrence_rule !== 'NONE' && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
+                                    🔄 {t.calendar.recurrenceOptions[evt.recurrence_rule]}
+                                  </span>
+                                )}
+                              </div>
+
+                              {evt.description && (
+                                <p className="text-[11px] text-muted-foreground truncate pt-0.5">
+                                  {evt.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Actions on Event Block */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={getGoogleCalendarUrl(evt)}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                title="เพิ่มลง Google Calendar"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditModal(evt);
+                                }}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                title={t.common.edit}
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingId(evt.id);
+                                }}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                                title={t.common.delete}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Bottom Row inside Event Block */}
+                          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                            <div className="flex items-center gap-3">
+                              <span className="flex items-center gap-1 font-bold text-foreground text-[11px]">
+                                <Clock className="w-3 h-3 text-primary" />
+                                {evt.start_time || '09:00'} - {evt.end_time || '10:00'}
+                              </span>
+
+                              {evt.location && (
+                                <span className="flex items-center gap-1 text-[11px] truncate max-w-[150px]">
+                                  <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate">{evt.location}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {evt.member_ids && evt.member_ids.length > 0 && (
+                              <div className="flex -space-x-1 shrink-0">
+                                {evt.member_ids.map((mid) => {
+                                  const m = familyMembers.find((mem) => mem.id === mid);
+                                  return m ? (
+                                    <MemberAvatar
+                                      key={m.id}
+                                      name={m.nickname}
+                                      color={m.member_color}
+                                      size="sm"
+                                    />
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Selected Date Events List */}
           <div className="bg-card text-card-foreground rounded-3xl p-5 border border-border shadow-soft space-y-4">
