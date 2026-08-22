@@ -57,7 +57,7 @@ export interface CalendarEvent {
   all_day: number; // 0 or 1
   location?: string | null;
   category: 'Family' | 'School' | 'Work' | 'Appointment' | 'Birthday' | 'Travel' | 'Health' | 'Other';
-  recurrence_rule: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  recurrence_rule: 'NONE' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'YEARLY';
   reminder_minutes: number;
   created_by: string;
   created_at: string;
@@ -76,7 +76,7 @@ export interface Task {
   due_time?: string | null; // HH:mm
   priority: 'LOW' | 'NORMAL' | 'HIGH';
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  recurrence_rule: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  recurrence_rule: 'NONE' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
   points: number;
   created_by: string;
   completed_by?: string | null;
@@ -126,7 +126,7 @@ export interface Bill {
   amount: number;
   category: string;
   due_date: string; // YYYY-MM-DD
-  recurrence_rule: 'NONE' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  recurrence_rule: 'NONE' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUALLY' | 'YEARLY';
   status: 'UNPAID' | 'PAID' | 'OVERDUE';
   notes?: string | null;
   created_by: string;
