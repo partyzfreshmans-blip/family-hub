@@ -31,12 +31,14 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
   const [eventDate, setEventDate] = useState(today);
   const [eventStartTime, setEventStartTime] = useState('09:00');
   const [eventCategory, setEventCategory] = useState<'Family' | 'School' | 'Work' | 'Appointment' | 'Birthday' | 'Travel' | 'Health' | 'Other'>('Family');
+  const [eventRecurrence, setEventRecurrence] = useState('NONE');
 
   // Task form
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDueDate, setTaskDueDate] = useState(today);
   const [taskPriority, setTaskPriority] = useState<'LOW' | 'NORMAL' | 'HIGH'>('NORMAL');
   const [taskPoints, setTaskPoints] = useState('10');
+  const [taskRecurrence, setTaskRecurrence] = useState('NONE');
 
   // Shopping form
   const [shopName, setShopName] = useState('');
@@ -87,6 +89,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
             eventDate,
             startTime: eventStartTime,
             category: eventCategory,
+            recurrenceRule: eventRecurrence,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error);
@@ -99,6 +102,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
             dueDate: taskDueDate,
             priority: taskPriority,
             points: taskPoints,
+            recurrenceRule: taskRecurrence,
             assignedTo: member?.id,
           }),
         });
@@ -288,6 +292,20 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">{t.calendar.recurrence}</label>
+                <select
+                  value={eventRecurrence}
+                  onChange={(e) => setEventRecurrence(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {(Object.entries(t.calendar.recurrenceOptions) as [string, string][]).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -326,6 +344,20 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                     <option value="HIGH">{t.tasks.priorities.HIGH}</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">{t.tasks.recurrence}</label>
+                <select
+                  value={taskRecurrence}
+                  onChange={(e) => setTaskRecurrence(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {(Object.entries(t.tasks.recurrenceOptions) as [string, string][]).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
               </div>
               {family?.rewards_enabled === 1 && (
                 <div>
