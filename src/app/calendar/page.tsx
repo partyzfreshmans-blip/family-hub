@@ -169,8 +169,8 @@ export default function CalendarPage() {
     }
   };
 
-  // Filter events for selected date in Day view or check matching
-  const dayEvents = events.filter((e) => e.event_date === selectedDate || e.recurrence_rule !== 'NONE');
+  // Filter events for selected date using recurrence rules
+  const dayEvents = events.filter((e) => isEventOnDate(e, selectedDate));
 
   // Month calculations
   const currentDate = new Date(selectedDate);
@@ -199,6 +199,38 @@ export default function CalendarPage() {
     Travel: 'bg-sky-500 text-white',
     Health: 'bg-red-500 text-white',
     Other: 'bg-slate-500 text-white',
+  };
+
+  const isEventOnDate = (e: CalendarEvent, targetDateStr: string): boolean => {
+    if (e.event_date === targetDateStr) return true;
+    if (!e.recurrence_rule || e.recurrence_rule === 'NONE') return false;
+    if (targetDateStr < e.event_date) return false;
+
+    const targetDate = new Date(targetDateStr + 'T00:00:00');
+    const eventDate = new Date(e.event_date + 'T00:00:00');
+
+    switch (e.recurrence_rule) {
+      case 'DAILY':
+        return true;
+      case 'WEEKDAYS': {
+        const day = targetDate.getDay();
+        return day >= 1 && day <= 5;
+      }
+      case 'WEEKLY':
+        return targetDate.getDay() === eventDate.getDay();
+      case 'BIWEEKLY': {
+        if (targetDate.getDay() !== eventDate.getDay()) return false;
+        const diffMs = targetDate.getTime() - eventDate.getTime();
+        const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+        return diffWeeks % 2 === 0;
+      }
+      case 'MONTHLY':
+        return targetDate.getDate() === eventDate.getDate();
+      case 'YEARLY':
+        return targetDate.getMonth() === eventDate.getMonth() && targetDate.getDate() === eventDate.getDate();
+      default:
+        return false;
+    }
   };
 
   const getGoogleCalendarUrl = (evt: CalendarEvent) => {
@@ -333,7 +365,7 @@ export default function CalendarPage() {
                     const isToday = thisDateStr === getTodayDateString();
                     const isSelected = thisDateStr === selectedDate;
 
-                    const dayEvts = events.filter((e) => e.event_date === thisDateStr);
+                    const dayEvts = events.filter((e) => isEventOnDate(e, thisDateStr));
 
                     return (
                       <button
@@ -621,7 +653,7 @@ export default function CalendarPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold mb-1">{t.calendar.eventDate} *</label>
               <input
@@ -646,6 +678,21 @@ export default function CalendarPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold mb-1">{t.calendar.recurrence}</label>
+            <select
+              value={recurrenceRule}
+              onChange={(e) => setRecurrenceRule(e.target.value as any)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {(Object.entries(t.calendar.recurrenceOptions) as [string, string][]).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-center gap-2 pt-1">
