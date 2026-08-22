@@ -21,6 +21,7 @@ import {
   LogOut,
   Sparkles,
   ChevronDown,
+  MapPin,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useTheme } from '@/components/ThemeContext';
@@ -51,6 +52,7 @@ export function AppShell({ children }: AppShellProps) {
     { label: t.nav.calendar, href: '/calendar', icon: Calendar },
     { label: t.nav.tasks, href: '/tasks', icon: CheckSquare },
     { label: t.nav.shopping, href: '/shopping', icon: ShoppingCart },
+    { label: t.nav.location, href: '/location', icon: MapPin },
     { label: t.nav.expenses, href: '/expenses', icon: DollarSign, hideForChild: true },
     { label: t.nav.bills, href: '/bills', icon: Receipt, hideForChild: true },
     { label: t.nav.family, href: '/family', icon: Users },
@@ -62,13 +64,13 @@ export function AppShell({ children }: AppShellProps) {
   const isChild = member?.role === 'CHILD';
   const visibleNavItems = navItems.filter((item) => !(isChild && item.hideForChild));
 
-  // Bottom Nav items (5 items)
+  // Bottom Nav items (6 items or 5 primary items with location)
   const bottomNavItems = [
     { label: t.nav.home, href: '/', icon: Home },
     { label: t.nav.calendar, href: '/calendar', icon: Calendar },
     { label: t.nav.tasks, href: '/tasks', icon: CheckSquare },
     { label: t.nav.shopping, href: '/shopping', icon: ShoppingCart },
-    { label: isChild ? t.nav.rewards : t.nav.expenses, href: isChild ? '/rewards' : '/expenses', icon: isChild ? Award : DollarSign },
+    { label: t.nav.location, href: '/location', icon: MapPin },
   ];
 
   return (

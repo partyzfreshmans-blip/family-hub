@@ -15,8 +15,11 @@ const IGNORED = [
   '.next',
   '.git',
   '.env.local',
+  '.env',
   'data',
-  '.DS_Store'
+  '.DS_Store',
+  'push.bat',
+  'push.ps1',
 ];
 
 function getAllFiles(dirPath, arrayOfFiles = []) {

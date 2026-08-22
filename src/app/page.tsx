@@ -29,15 +29,23 @@ export default function HomePage() {
   const { t } = useLanguage();
   const { member, family, refreshUser } = useAuth();
   const [data, setData] = useState<any>(null);
+  const [locationMembers, setLocationMembers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quickAddType, setQuickAddType] = useState<any>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const res = await fetch('/api/dashboard');
-      if (res.ok) {
-        const json = await res.json();
+      const [dashRes, locRes] = await Promise.all([
+        fetch('/api/dashboard'),
+        fetch('/api/location'),
+      ]);
+      if (dashRes.ok) {
+        const json = await dashRes.json();
         setData(json);
+      }
+      if (locRes.ok) {
+        const locJson = await locRes.json();
+        setLocationMembers(locJson.members || []);
       }
     } catch (err) {
       console.error('Error loading dashboard:', err);
@@ -114,6 +122,56 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Family Right Now (ครอบครัวตอนนี้) Widget */}
+      {locationMembers.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-card border border-border/80 shadow-soft flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
+              <span className="p-1.5 rounded-xl bg-sky-500/10 text-sky-500">
+                <MapPin className="w-4 h-4" />
+              </span>
+              <span>{t.location.homeWidgetTitle}</span>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {locationMembers.map((m: any) => {
+                const isSharing = m.is_sharing || m.family_member_id === member?.id;
+                const place = m.matched_place?.name || (isSharing && m.latitude ? 'นอกสถานที่' : 'ไม่ได้แชร์');
+                const isLive = m.stale_status === 'LIVE' && isSharing;
+
+                return (
+                  <div
+                    key={m.family_member_id}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-muted/40 border border-border/50 text-xs"
+                  >
+                    <div className="relative">
+                      <div
+                        style={{ backgroundColor: m.member?.member_color || '#3b82f6' }}
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white font-extrabold text-[10px]"
+                      >
+                        {(m.member?.nickname || 'สมาชิก').substring(0, 1)}
+                      </div>
+                      {isLive && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white" />
+                      )}
+                    </div>
+                    <span className="font-bold text-foreground">{m.member?.nickname}:</span>
+                    <span className="text-muted-foreground font-medium">{place}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <Link
+            href="/location"
+            className="self-end sm:self-center px-4 py-2 rounded-2xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs flex items-center gap-1.5 transition-all shrink-0"
+          >
+            ดูแผนที่ <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Grid Cards Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">

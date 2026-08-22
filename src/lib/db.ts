@@ -314,6 +314,121 @@ function initSchema(db: Database) {
       FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
     );
 
+    -- Member Location Settings Table
+    CREATE TABLE IF NOT EXISTS member_location_settings (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      family_member_id TEXT UNIQUE NOT NULL,
+      sharing_mode TEXT NOT NULL DEFAULT 'APP_ACTIVE' CHECK(sharing_mode IN ('OFF', 'ONCE', 'TIMED', 'APP_ACTIVE')),
+      sharing_enabled INTEGER NOT NULL DEFAULT 1,
+      sharing_expires_at TEXT,
+      history_enabled INTEGER NOT NULL DEFAULT 0,
+      retention_days INTEGER NOT NULL DEFAULT 7,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+    );
+
+    -- Member Latest Current Location Table
+    CREATE TABLE IF NOT EXISTS member_current_locations (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      family_member_id TEXT UNIQUE NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      accuracy REAL NOT NULL,
+      recorded_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      source TEXT DEFAULT 'foreground',
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+    );
+
+    -- Member Location History Table
+    CREATE TABLE IF NOT EXISTS member_location_history (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      family_member_id TEXT NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      accuracy REAL NOT NULL,
+      recorded_at TEXT NOT NULL,
+      source TEXT DEFAULT 'foreground',
+      created_at TEXT NOT NULL,
+      place_name TEXT,
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+    );
+
+    -- Family Saved Places Table
+    CREATE TABLE IF NOT EXISTS family_saved_places (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      radius_meters REAL NOT NULL DEFAULT 150,
+      category TEXT NOT NULL DEFAULT 'OTHER',
+      icon TEXT DEFAULT 'MapPin',
+      active INTEGER DEFAULT 1,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+    );
+
+    -- Location Requests Table
+    CREATE TABLE IF NOT EXISTS location_requests (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      requester_member_id TEXT NOT NULL,
+      target_member_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'DECLINED', 'EXPIRED')),
+      requested_at TEXT NOT NULL,
+      responded_at TEXT,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+      FOREIGN KEY (requester_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+    );
+
+    -- Location Place Alerts Table
+    CREATE TABLE IF NOT EXISTS location_place_alerts (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      viewer_member_id TEXT NOT NULL,
+      target_member_id TEXT NOT NULL,
+      saved_place_id TEXT NOT NULL,
+      notify_on_arrival INTEGER DEFAULT 1,
+      notify_on_leave INTEGER DEFAULT 1,
+      active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+      FOREIGN KEY (viewer_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
+      FOREIGN KEY (saved_place_id) REFERENCES family_saved_places(id) ON DELETE CASCADE
+    );
+
+    -- SOS Events Table
+    CREATE TABLE IF NOT EXISTS sos_events (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      family_member_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'RESOLVED', 'CANCELLED')),
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      initial_latitude REAL NOT NULL,
+      initial_longitude REAL NOT NULL,
+      initial_accuracy REAL NOT NULL,
+      last_latitude REAL NOT NULL,
+      last_longitude REAL NOT NULL,
+      last_accuracy REAL NOT NULL,
+      last_updated_at TEXT NOT NULL,
+      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+    );
+
     -- Indexes for High Performance & Query Isolation
     CREATE INDEX IF NOT EXISTS idx_members_family ON family_members(family_id);
     CREATE INDEX IF NOT EXISTS idx_members_user ON family_members(user_id);
@@ -324,6 +439,11 @@ function initSchema(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_expenses_family_date ON expenses(family_id, expense_date);
     CREATE INDEX IF NOT EXISTS idx_bills_family_due ON bills(family_id, due_date);
     CREATE INDEX IF NOT EXISTS idx_invites_code ON family_invites(invite_code);
+    CREATE INDEX IF NOT EXISTS idx_loc_curr_family ON member_current_locations(family_id);
+    CREATE INDEX IF NOT EXISTS idx_loc_hist_family_member ON member_location_history(family_id, family_member_id, recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_loc_places_family ON family_saved_places(family_id);
+    CREATE INDEX IF NOT EXISTS idx_loc_req_family ON location_requests(family_id, target_member_id, status);
+    CREATE INDEX IF NOT EXISTS idx_sos_family ON sos_events(family_id, status);
   `;
 
   db.exec(schema);

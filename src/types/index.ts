@@ -200,3 +200,110 @@ export interface SessionPayload {
   activeMemberId?: string;
   role?: Role;
 }
+
+// ----------------------------------------------------
+// Family Location Types
+// ----------------------------------------------------
+
+export type LocationSharingMode = 'OFF' | 'ONCE' | 'TIMED' | 'APP_ACTIVE';
+
+export interface MemberLocationSettings {
+  id: string;
+  family_id: string;
+  family_member_id: string;
+  sharing_mode: LocationSharingMode;
+  sharing_enabled: number; // 0 or 1
+  sharing_expires_at?: string | null;
+  history_enabled: number; // 0 or 1
+  retention_days: number; // 0, 1, 7, 30
+  updated_at: string;
+}
+
+export interface MemberCurrentLocation {
+  id: string;
+  family_id: string;
+  family_member_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  recorded_at: string;
+  updated_at: string;
+  source?: 'foreground' | 'one_time_share' | 'sos' | 'manual_request';
+  member?: FamilyMember;
+  matched_place?: FamilySavedPlace | null;
+  distance_to_place_meters?: number | null;
+  stale_status?: 'LIVE' | 'RECENT' | 'STALE' | 'OFFLINE' | 'DISABLED';
+  is_sharing?: boolean;
+  sharing_mode?: string;
+}
+
+export interface MemberLocationHistory {
+  id: string;
+  family_id: string;
+  family_member_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  recorded_at: string;
+  source: string;
+  created_at: string;
+  place_name?: string | null;
+}
+
+export interface FamilySavedPlace {
+  id: string;
+  family_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  category: 'HOME' | 'SCHOOL' | 'WORK' | 'GRANDPARENTS' | 'HOSPITAL' | 'OTHER';
+  icon: string;
+  active: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationRequest {
+  id: string;
+  family_id: string;
+  requester_member_id: string;
+  target_member_id: string;
+  status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'EXPIRED';
+  requested_at: string;
+  responded_at?: string | null;
+  expires_at: string;
+  requester?: FamilyMember;
+  target?: FamilyMember;
+}
+
+export interface LocationPlaceAlert {
+  id: string;
+  family_id: string;
+  viewer_member_id: string;
+  target_member_id: string;
+  saved_place_id: string;
+  notify_on_arrival: number;
+  notify_on_leave: number;
+  active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SosEvent {
+  id: string;
+  family_id: string;
+  family_member_id: string;
+  status: 'ACTIVE' | 'RESOLVED' | 'CANCELLED';
+  started_at: string;
+  ended_at?: string | null;
+  initial_latitude: number;
+  initial_longitude: number;
+  initial_accuracy: number;
+  last_latitude: number;
+  last_longitude: number;
+  last_accuracy: number;
+  last_updated_at: string;
+  member?: FamilyMember;
+}

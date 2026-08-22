@@ -176,6 +176,53 @@ export async function seedDatabase() {
     );
   }
 
+  // 12. Family Saved Places
+  const savedPlaces = [
+    { id: 'place_home', name: 'บ้านสุขใจ 🏡', lat: 19.9072, lon: 99.8325, rad: 100, cat: 'HOME', icon: 'Home' },
+    { id: 'place_school', name: 'โรงเรียนสาธิตฯ 🏫', lat: 19.9150, lon: 99.8400, rad: 150, cat: 'SCHOOL', icon: 'GraduationCap' },
+    { id: 'place_mall', name: 'Central Chiang Rai 🛍️', lat: 19.8962, lon: 99.8327, rad: 200, cat: 'OTHER', icon: 'ShoppingBag' },
+    { id: 'place_work', name: 'ที่ทำงาน / สำนักงาน 🏢', lat: 19.9200, lon: 99.8250, rad: 150, cat: 'WORK', icon: 'Briefcase' },
+  ];
+
+  for (const p of savedPlaces) {
+    db.run(
+      `INSERT OR REPLACE INTO family_saved_places (id, family_id, name, latitude, longitude, radius_meters, category, icon, active, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      [p.id, familyId, p.name, p.lat, p.lon, p.rad, p.cat, p.icon, 'mem_dad', now, now]
+    );
+  }
+
+  // 13. Member Location Settings & Initial Locations
+  const memberLocs = [
+    { memberId: 'mem_dad', lat: 19.9073, lon: 99.8324, acc: 12, mode: 'APP_ACTIVE', place: 'บ้านสุขใจ' },
+    { memberId: 'mem_mom', lat: 19.8964, lon: 99.8326, acc: 18, mode: 'APP_ACTIVE', place: 'Central Chiang Rai' },
+    { memberId: 'mem_son', lat: 19.9152, lon: 99.8398, acc: 15, mode: 'APP_ACTIVE', place: 'โรงเรียนสาธิตฯ' },
+    { memberId: 'mem_dau', lat: 19.9071, lon: 99.8326, acc: 14, mode: 'APP_ACTIVE', place: 'บ้านสุขใจ' },
+  ];
+
+  for (const m of memberLocs) {
+    // Settings
+    db.run(
+      `INSERT OR REPLACE INTO member_location_settings (id, family_id, family_member_id, sharing_mode, sharing_enabled, history_enabled, retention_days, updated_at)
+       VALUES (?, ?, ?, ?, 1, 1, 7, ?)`,
+      [`locset_${m.memberId}`, familyId, m.memberId, m.mode, now]
+    );
+
+    // Current location
+    db.run(
+      `INSERT OR REPLACE INTO member_current_locations (id, family_id, family_member_id, latitude, longitude, accuracy, recorded_at, updated_at, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'foreground')`,
+      [`curloc_${m.memberId}`, familyId, m.memberId, m.lat, m.lon, m.acc, now, now]
+    );
+
+    // Initial history record
+    db.run(
+      `INSERT OR REPLACE INTO member_location_history (id, family_id, family_member_id, latitude, longitude, accuracy, recorded_at, source, created_at, place_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'foreground', ?, ?)`,
+      [`hist_${m.memberId}_1`, familyId, m.memberId, m.lat, m.lon, m.acc, now, now, m.place]
+    );
+  }
+
   saveDatabase();
-  console.log('[SEED] Database successfully seeded with ครอบครัวสุขใจ!');
+  console.log('[SEED] Database successfully seeded with ครอบครัวสุขใจ and Family Location!');
 }
