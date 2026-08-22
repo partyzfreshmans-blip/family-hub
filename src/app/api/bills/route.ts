@@ -88,7 +88,43 @@ export async function POST(req: NextRequest) {
 }
 
 // PATCH: Mark bill as paid or edit
-export async function PATCH(req: NextRequest) {
+function computeNextDueDate(currentDueDateStr: string, recurrenceRule: string): string {
+  const date = new Date(currentDueDateStr);
+  if (isNaN(date.getTime())) return currentDueDateStr;
+
+  switch (recurrenceRule) {
+    case 'WEEKLY':
+      date.setDate(date.getDate() + 7);
+      break;
+    case 'BIWEEKLY':
+      date.setDate(date.getDate() + 14);
+      break;
+    case 'MONTHLY':
+      date.setMonth(date.getMonth() + 1);
+      break;
+    case 'BIMONTHLY':
+      date.setMonth(date.getMonth() + 2);
+      break;
+    case 'QUARTERLY':
+      date.setMonth(date.getMonth() + 3);
+      break;
+    case 'SEMIANNUALLY':
+      date.setMonth(date.getMonth() + 6);
+      break;
+    case 'YEARLY':
+      date.setFullYear(date.getFullYear() + 1);
+      break;
+    default:
+      return currentDueDateStr;
+  }
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export async function PATCH(req: Request) {
   try {
     const ctx = await getCurrentUserContext();
     if (!ctx) {
@@ -96,7 +132,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (ctx.member.role === 'CHILD') {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -134,11 +170,19 @@ export async function PATCH(req: NextRequest) {
           [generateId('exp'), ctx.family.id, paymentAmount, bill.category, `ชำระบิล: ${bill.name}`, payer, paymentDate, note || '', ctx.member.id, now, now]
         );
 
-        // 3. Update bill status
-        await execute(
-          'UPDATE bills SET status = "PAID", updated_at = ? WHERE id = ? AND family_id = ?',
-          [now, bill.id, ctx.family.id]
-        );
+        // 3. Update bill status & advance due date if recurring
+        if (bill.recurrence_rule && bill.recurrence_rule !== 'NONE') {
+          const nextDueDate = computeNextDueDate(bill.due_date, bill.recurrence_rule);
+          await execute(
+            'UPDATE bills SET status = "UNPAID", due_date = ?, updated_at = ? WHERE id = ? AND family_id = ?',
+            [nextDueDate, now, bill.id, ctx.family.id]
+          );
+        } else {
+          await execute(
+            'UPDATE bills SET status = "PAID", updated_at = ? WHERE id = ? AND family_id = ?',
+            [now, bill.id, ctx.family.id]
+          );
+        }
       });
 
       return NextResponse.json({ success: true, paid: true });
