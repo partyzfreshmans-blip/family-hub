@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { AppShell } from '@/components/layout/AppShell';
 import { useAuth } from '@/components/AuthContext';
 import { useLanguage } from '@/components/LanguageContext';
 import {
@@ -240,8 +239,7 @@ export default function LocationPage() {
   const selectedMemberLoc = members.find((m) => m.family_member_id === selectedMemberId);
 
   return (
-    <AppShell>
-      <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12">
         {/* Toast Notification */}
         {toastMsg && (
           <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-foreground text-background font-bold text-xs shadow-xl flex items-center gap-2 animate-fade-in">
@@ -475,6 +473,5 @@ export default function LocationPage() {
           }}
         />
       </div>
-    </AppShell>
   );
 }
