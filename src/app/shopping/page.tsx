@@ -9,14 +9,13 @@ import {
   RotateCcw,
   Trash2,
   Sparkles,
-  Tag,
+  Loader2,
   Check,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
-import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { ShoppingItem } from '@/types';
 
 export default function ShoppingPage() {
@@ -26,6 +25,8 @@ export default function ShoppingPage() {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [frequentItems, setFrequentItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fast Inline Add Form State
   const [itemName, setItemName] = useState('');
@@ -104,29 +105,45 @@ export default function ShoppingPage() {
   };
 
   const handleTogglePurchased = async (item: ShoppingItem) => {
+    if (togglingId) return;
+    setTogglingId(item.id);
     const nextPurchased = item.purchased === 1 ? 0 : 1;
+
     try {
-      const res = await fetch('/api/shopping', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.id, purchased: nextPurchased }),
-      });
+      // Small visual delay so the user sees the beautiful tick / spin animation
+      const [res] = await Promise.all([
+        fetch('/api/shopping', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id, purchased: nextPurchased }),
+        }),
+        new Promise((resolve) => setTimeout(resolve, 280)),
+      ]);
+
       if (res.ok) {
-        fetchItems();
+        await fetchItems();
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setTogglingId(null);
     }
   };
 
   const handleDelete = async (itemId: string) => {
+    setDeletingId(itemId);
     try {
-      const res = await fetch(`/api/shopping?id=${itemId}`, { method: 'DELETE' });
+      const [res] = await Promise.all([
+        fetch(`/api/shopping?id=${itemId}`, { method: 'DELETE' }),
+        new Promise((resolve) => setTimeout(resolve, 200)),
+      ]);
       if (res.ok) {
-        fetchItems();
+        await fetchItems();
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -158,7 +175,7 @@ export default function ShoppingPage() {
               disabled={isSubmitting || !itemName.trim()}
               className="px-5 py-2.5 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 flex-shrink-0"
             >
-              <Plus className="w-4 h-4" />
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               <span className="hidden sm:inline">{t.common.add}</span>
             </button>
           </div>
@@ -240,45 +257,68 @@ export default function ShoppingPage() {
               />
             ) : (
               <div className="space-y-2">
-                {pendingItems.map((item: any) => (
-                  <div
-                    key={item.id}
-                    className="p-3.5 rounded-2xl bg-card border border-border shadow-soft flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <button
-                        onClick={() => handleTogglePurchased(item)}
-                        className="text-muted-foreground hover:text-emerald-500 transition-colors flex-shrink-0"
-                        title="ซื้อแล้ว"
-                      >
-                        <Circle className="w-5 h-5" />
-                      </button>
+                {pendingItems.map((item: any) => {
+                  const isToggling = togglingId === item.id;
+                  const isDeleting = deletingId === item.id;
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-sm text-foreground truncate">{item.name}</p>
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-muted text-foreground">
-                            {item.quantity} {item.unit || 'ชิ้น'}
-                          </span>
-                        </div>
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3.5 rounded-2xl bg-card border border-border shadow-soft flex items-center justify-between gap-3 transition-all duration-300 ${
+                        isToggling
+                          ? 'scale-[0.98] bg-emerald-500/10 border-emerald-500/40'
+                          : isDeleting
+                          ? 'opacity-0 scale-95'
+                          : 'hover:border-primary/40 animate-slide-up'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <button
+                          onClick={() => handleTogglePurchased(item)}
+                          disabled={isToggling}
+                          className="p-1 rounded-xl text-muted-foreground hover:text-emerald-500 transition-all flex-shrink-0 active:scale-90"
+                          title="ซื้อแล้ว"
+                        >
+                          {isToggling ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500 animate-check-pop" />
+                          ) : (
+                            <Circle className="w-5 h-5 hover:scale-110 transition-transform" />
+                          )}
+                        </button>
 
-                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
-                          <Badge variant="primary" size="sm">
-                            {t.shopping.categories[item.category as keyof typeof t.shopping.categories] || item.category}
-                          </Badge>
-                          {item.adder_nick && <span>เพิ่มโดย {item.adder_nick}</span>}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`font-bold text-sm text-foreground truncate transition-all duration-200 ${
+                                isToggling ? 'line-through text-muted-foreground' : ''
+                              }`}
+                            >
+                              {item.name}
+                            </p>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-muted text-foreground">
+                              {item.quantity} {item.unit || 'ชิ้น'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                            <Badge variant="primary" size="sm">
+                              {t.shopping.categories[item.category as keyof typeof t.shopping.categories] || item.category}
+                            </Badge>
+                            {item.adder_nick && <span>เพิ่มโดย {item.adder_nick}</span>}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        disabled={isDeleting || isToggling}
+                        className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -296,41 +336,56 @@ export default function ShoppingPage() {
               </div>
 
               <div className="space-y-2">
-                {purchasedItems.map((item: any) => (
-                  <div
-                    key={item.id}
-                    className="p-3.5 rounded-2xl bg-muted/30 border border-border/40 flex items-center justify-between gap-3 opacity-60 hover:opacity-100 transition-opacity"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm line-through text-muted-foreground truncate">
-                          {item.name} ({item.quantity} {item.unit || 'ชิ้น'})
-                        </p>
-                        {item.buyer_nick && (
-                          <p className="text-[10px] text-muted-foreground">ซื้อแล้วโดย {item.buyer_nick}</p>
-                        )}
+                {purchasedItems.map((item: any) => {
+                  const isToggling = togglingId === item.id;
+                  const isDeleting = deletingId === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3.5 rounded-2xl bg-muted/30 border border-border/40 flex items-center justify-between gap-3 transition-all duration-300 ${
+                        isToggling
+                          ? 'scale-[0.98] opacity-100 bg-primary-500/10 border-primary/40'
+                          : isDeleting
+                          ? 'opacity-0 scale-95'
+                          : 'opacity-60 hover:opacity-100 animate-slide-up'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm line-through text-muted-foreground truncate">
+                            {item.name} ({item.quantity} {item.unit || 'ชิ้น'})
+                          </p>
+                          {item.buyer_nick && (
+                            <p className="text-[10px] text-muted-foreground">ซื้อแล้วโดย {item.buyer_nick}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleTogglePurchased(item)}
+                          disabled={isToggling}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-primary hover:bg-primary/10 flex items-center gap-1.5 transition-all active:scale-95"
+                          title={t.shopping.restore}
+                        >
+                          <RotateCcw className={`w-3.5 h-3.5 ${isToggling ? 'animate-spin' : ''}`} />
+                          <span className="hidden sm:inline">
+                            {isToggling ? 'กำลังย้าย...' : t.shopping.restore}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={isDeleting || isToggling}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleTogglePurchased(item)}
-                        className="p-2 rounded-xl text-xs font-semibold text-primary hover:bg-primary/10 flex items-center gap-1 transition-colors"
-                        title={t.shopping.restore}
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">{t.shopping.restore}</span>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

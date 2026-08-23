@@ -33,6 +33,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -110,19 +111,26 @@ export default function TasksPage() {
   };
 
   const handleToggleStatus = async (task: Task) => {
-    const nextStatus = task.status === 'COMPLETED' ? 'TODO' : 'COMPLETED';
+    if (togglingTaskId) return;
+    setTogglingTaskId(task.id);
+    const nextStatus = task.status === "COMPLETED" ? "TODO" : "COMPLETED";
     try {
-      const res = await fetch('/api/tasks', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: nextStatus }),
-      });
+      const [res] = await Promise.all([
+        fetch("/api/tasks", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: task.id, status: nextStatus }),
+        }),
+        new Promise((resolve) => setTimeout(resolve, 250)),
+      ]);
       if (res.ok) {
-        fetchTasks();
+        await fetchTasks();
         refreshUser();
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setTogglingTaskId(null);
     }
   };
 
@@ -288,6 +296,7 @@ export default function TasksPage() {
         <div className="space-y-3">
           {tasks.map((task: any) => {
             const isDone = task.status === 'COMPLETED';
+            const isToggling = togglingTaskId === task.id;
             const isHigh = task.priority === 'HIGH';
             const isOverdue = task.due_date && task.due_date < today && !isDone;
 
@@ -303,13 +312,16 @@ export default function TasksPage() {
                 <div className="flex items-start gap-3.5 min-w-0">
                   <button
                     onClick={() => handleToggleStatus(task)}
-                    className="mt-0.5 text-muted-foreground hover:text-emerald-500 transition-colors flex-shrink-0"
-                    title={isDone ? 'ทำอีกครั้ง' : 'เสร็จแล้ว'}
+                    disabled={isToggling}
+                    className="mt-0.5 text-muted-foreground hover:text-emerald-500 transition-all flex-shrink-0 active:scale-90"
+                    title={isDone ? "ทำอีกครั้ง" : "เสร็จแล้ว"}
                   >
-                    {isDone ? (
-                      <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                    {isToggling ? (
+                      <CheckCircle2 className="w-6 h-6 text-emerald-500 animate-check-pop" />
+                    ) : isDone ? (
+                      <CheckCircle2 className="w-6 h-6 text-emerald-500 hover:scale-105 transition-transform" />
                     ) : (
-                      <Circle className="w-6 h-6 hover:text-primary" />
+                      <Circle className="w-6 h-6 hover:text-primary hover:scale-105 transition-transform" />
                     )}
                   </button>
 
