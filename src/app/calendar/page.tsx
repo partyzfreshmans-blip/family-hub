@@ -29,6 +29,68 @@ import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { CalendarEvent, FamilyMember } from '@/types';
 
+
+const categoryColorMap: Record<string, string> = {
+  Family: "bg-blue-500 text-white",
+  School: "bg-amber-500 text-white",
+  Work: "bg-purple-500 text-white",
+  Appointment: "bg-emerald-500 text-white",
+  Birthday: "bg-rose-500 text-white",
+  Travel: "bg-sky-500 text-white",
+  Health: "bg-red-500 text-white",
+  Other: "bg-slate-500 text-white",
+};
+
+function isEventOnDate(e: CalendarEvent, targetDateStr: string): boolean {
+  if (e.event_date === targetDateStr) return true;
+  if (!e.recurrence_rule || e.recurrence_rule === "NONE") return false;
+  if (targetDateStr < e.event_date) return false;
+
+  const targetDate = new Date(targetDateStr + "T00:00:00");
+  const eventDate = new Date(e.event_date + "T00:00:00");
+
+  switch (e.recurrence_rule) {
+    case "DAILY":
+      return true;
+    case "WEEKDAYS": {
+      const day = targetDate.getDay();
+      return day >= 1 && day <= 5;
+    }
+    case "WEEKLY":
+      return targetDate.getDay() === eventDate.getDay();
+    case "BIWEEKLY": {
+      if (targetDate.getDay() !== eventDate.getDay()) return false;
+      const diffMs = targetDate.getTime() - eventDate.getTime();
+      const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+      return diffWeeks % 2 === 0;
+    }
+    case "MONTHLY":
+      return targetDate.getDate() === eventDate.getDate();
+    case "YEARLY":
+      return targetDate.getMonth() === eventDate.getMonth() && targetDate.getDate() === eventDate.getDate();
+    default:
+      return false;
+  }
+}
+
+function getGoogleCalendarUrl(evt: CalendarEvent) {
+  const title = encodeURIComponent(evt.title);
+  const details = encodeURIComponent(evt.description || "กิจกรรมจาก Family Hub");
+  const loc = encodeURIComponent(evt.location || "");
+
+  let dates: string;
+  const cleanDate = evt.event_date.replace(/-/g, "");
+  if (evt.all_day || !evt.start_time) {
+    dates = cleanDate + "/" + cleanDate;
+  } else {
+    const cleanStartTime = evt.start_time.replace(/:/g, "") + "00";
+    const cleanEndTime = (evt.end_time ? evt.end_time.replace(/:/g, "") : cleanStartTime) + "00";
+    dates = cleanDate + "T" + cleanStartTime + "/" + cleanDate + "T" + cleanEndTime;
+  }
+
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + title + "&dates=" + dates + "&details=" + details + "&location=" + loc;
+}
+
 export default function CalendarPage() {
   const { t } = useLanguage();
   const { member, family } = useAuth();
@@ -190,66 +252,6 @@ export default function CalendarPage() {
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
-  const categoryColorMap: Record<string, string> = {
-    Family: 'bg-blue-500 text-white',
-    School: 'bg-amber-500 text-white',
-    Work: 'bg-purple-500 text-white',
-    Appointment: 'bg-emerald-500 text-white',
-    Birthday: 'bg-rose-500 text-white',
-    Travel: 'bg-sky-500 text-white',
-    Health: 'bg-red-500 text-white',
-    Other: 'bg-slate-500 text-white',
-  };
-
-  const isEventOnDate = (e: CalendarEvent, targetDateStr: string): boolean => {
-    if (e.event_date === targetDateStr) return true;
-    if (!e.recurrence_rule || e.recurrence_rule === 'NONE') return false;
-    if (targetDateStr < e.event_date) return false;
-
-    const targetDate = new Date(targetDateStr + 'T00:00:00');
-    const eventDate = new Date(e.event_date + 'T00:00:00');
-
-    switch (e.recurrence_rule) {
-      case 'DAILY':
-        return true;
-      case 'WEEKDAYS': {
-        const day = targetDate.getDay();
-        return day >= 1 && day <= 5;
-      }
-      case 'WEEKLY':
-        return targetDate.getDay() === eventDate.getDay();
-      case 'BIWEEKLY': {
-        if (targetDate.getDay() !== eventDate.getDay()) return false;
-        const diffMs = targetDate.getTime() - eventDate.getTime();
-        const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
-        return diffWeeks % 2 === 0;
-      }
-      case 'MONTHLY':
-        return targetDate.getDate() === eventDate.getDate();
-      case 'YEARLY':
-        return targetDate.getMonth() === eventDate.getMonth() && targetDate.getDate() === eventDate.getDate();
-      default:
-        return false;
-    }
-  };
-
-  const getGoogleCalendarUrl = (evt: CalendarEvent) => {
-    const title = encodeURIComponent(evt.title);
-    const details = encodeURIComponent(evt.description || 'กิจกรรมจาก Family Hub');
-    const loc = encodeURIComponent(evt.location || '');
-
-    let dates: string;
-    const cleanDate = evt.event_date.replace(/-/g, '');
-    if (evt.all_day || !evt.start_time) {
-      dates = `${cleanDate}/${cleanDate}`;
-    } else {
-      const cleanStartTime = evt.start_time.replace(/:/g, '') + '00';
-      const cleanEndTime = (evt.end_time ? evt.end_time.replace(/:/g, '') : cleanStartTime) + '00';
-      dates = `${cleanDate}T${cleanStartTime}/${cleanDate}T${cleanEndTime}`;
-    }
-
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${loc}`;
-  };
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const feedHttpsUrl = family ? `${origin}/api/calendar/feed?familyId=${family.id}` : '';
