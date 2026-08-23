@@ -31,12 +31,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (filter === 'today' && today) {
-      sql += ' AND (t.due_date = ? OR (t.due_date < ? AND t.status != "COMPLETED"))';
+      sql += " AND (t.due_date = ? OR (t.due_date < ? AND t.status != 'COMPLETED'))";
       params.push(today, today);
     } else if (filter === 'in_progress') {
-      sql += ' AND t.status = "IN_PROGRESS"';
+      sql += " AND t.status = 'IN_PROGRESS'";
     } else if (filter === 'completed') {
-      sql += ' AND t.status = "COMPLETED"';
+      sql += " AND t.status = 'COMPLETED'";
     }
 
     sql += ` ORDER BY 

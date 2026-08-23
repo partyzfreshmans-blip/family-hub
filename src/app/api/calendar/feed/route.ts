@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch upcoming bills too
     const bills = await query<{ id: string; name: string; amount: number; due_date: string; recurrence_rule: string; category: string }>(
-      'SELECT * FROM bills WHERE family_id = ? AND status != "PAID"',
+      "SELECT * FROM bills WHERE family_id = ? AND status != 'PAID'",
       [family.id]
     );
 

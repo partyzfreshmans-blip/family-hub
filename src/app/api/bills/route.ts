@@ -17,7 +17,7 @@ export async function GET() {
     }
 
     const bills = await query<Bill>(
-      'SELECT * FROM bills WHERE family_id = ? ORDER BY CASE status WHEN "UNPAID" THEN 1 WHEN "OVERDUE" THEN 2 ELSE 3 END, due_date ASC',
+      "SELECT * FROM bills WHERE family_id = ? ORDER BY CASE status WHEN 'UNPAID' THEN 1 WHEN 'OVERDUE' THEN 2 ELSE 3 END, due_date ASC",
       [ctx.family.id]
     );
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH: Mark bill as paid or edit
+// Helper: compute next due date
 function computeNextDueDate(currentDueDateStr: string, recurrenceRule: string): string {
   const date = new Date(currentDueDateStr);
   if (isNaN(date.getTime())) return currentDueDateStr;
@@ -124,6 +124,7 @@ function computeNextDueDate(currentDueDateStr: string, recurrenceRule: string): 
   return `${y}-${m}-${d}`;
 }
 
+// PATCH: Mark bill as paid or edit
 export async function PATCH(req: Request) {
   try {
     const ctx = await getCurrentUserContext();
@@ -174,12 +175,12 @@ export async function PATCH(req: Request) {
         if (bill.recurrence_rule && bill.recurrence_rule !== 'NONE') {
           const nextDueDate = computeNextDueDate(bill.due_date, bill.recurrence_rule);
           await execute(
-            'UPDATE bills SET status = "UNPAID", due_date = ?, updated_at = ? WHERE id = ? AND family_id = ?',
+            "UPDATE bills SET status = 'UNPAID', due_date = ?, updated_at = ? WHERE id = ? AND family_id = ?",
             [nextDueDate, now, bill.id, ctx.family.id]
           );
         } else {
           await execute(
-            'UPDATE bills SET status = "PAID", updated_at = ? WHERE id = ? AND family_id = ?',
+            "UPDATE bills SET status = 'PAID', updated_at = ? WHERE id = ? AND family_id = ?",
             [now, bill.id, ctx.family.id]
           );
         }

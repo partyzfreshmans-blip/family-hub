@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const params: any[] = [ctx.family.id];
 
     if (startDate && endDate) {
-      sql += ' AND (e.event_date >= ? AND e.event_date <= ? OR e.recurrence_rule != "NONE")';
+      sql += " AND (e.event_date >= ? AND e.event_date <= ? OR e.recurrence_rule != 'NONE')";
       params.push(startDate, endDate);
     }
 
