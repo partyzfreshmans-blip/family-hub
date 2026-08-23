@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/Badge';
 import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { Expense, FamilyMember } from '@/types';
+import { StatementReaderModal } from '@/components/expenses/StatementReaderModal';
+import { Sparkles, FileSpreadsheet } from 'lucide-react';
 
 export default function ExpensesPage() {
   const { t } = useLanguage();
@@ -32,6 +34,7 @@ export default function ExpensesPage() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form State
@@ -153,13 +156,23 @@ export default function ExpensesPage() {
           <p className="text-xs text-muted-foreground">บันทึกและติดตามการใช้จ่ายภายในครอบครัว</p>
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t.expenses.addExpense}</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setIsStatementModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-border bg-card hover:bg-muted text-foreground text-xs font-bold shadow-soft transition-all"
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>อ่าน Statement / สลิป</span>
+          </button>
+
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{t.expenses.addExpense}</span>
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
