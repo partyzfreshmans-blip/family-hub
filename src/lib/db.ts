@@ -1,9 +1,25 @@
 import fs from 'fs';
 import path from 'path';
-import initSqlJs, { Database, SqlValue } from 'sql.js';
+import initSqlJs, { Database } from 'sql.js';
+import { createClient, Client as TursoClient } from '@libsql/client';
 
+// Turso configuration
+const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL;
+const tursoAuthToken = process.env.TURSO_AUTH_TOKEN;
+const isTursoEnabled = !!tursoUrl;
+
+let tursoClient: TursoClient | null = null;
+let tursoInitPromise: Promise<void> | null = null;
+
+if (isTursoEnabled) {
+  tursoClient = createClient({
+    url: tursoUrl!,
+    authToken: tursoAuthToken,
+  });
+}
+
+// Local SQLite configuration (fallback)
 let dbInstance: Database | null = null;
-let isInitializing = false;
 let initPromise: Promise<Database> | null = null;
 
 const isVercel = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
@@ -13,6 +29,7 @@ const dbFilePath = process.env.DATABASE_PATH
   : path.join(dbDir, 'family_hub.db');
 
 export function saveDatabase() {
+  if (isTursoEnabled) return;
   if (!dbInstance) return;
   try {
     if (!fs.existsSync(dbDir)) {
@@ -26,9 +43,401 @@ export function saveDatabase() {
   }
 }
 
+const DB_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    avatar_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS families (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    currency TEXT DEFAULT 'THB',
+    monthly_budget REAL DEFAULT 0,
+    rewards_enabled INTEGER DEFAULT 1,
+    avatar_icon TEXT DEFAULT 'home',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS family_members (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('ADMIN', 'ADULT', 'CHILD')),
+    nickname TEXT NOT NULL,
+    member_color TEXT NOT NULL DEFAULT '#3b82f6',
+    points_balance INTEGER NOT NULL DEFAULT 0,
+    joined_at TEXT NOT NULL,
+    UNIQUE(family_id, user_id),
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS family_invites (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    invite_code TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'ADULT' CHECK(role IN ('ADMIN', 'ADULT', 'CHILD')),
+    expires_at TEXT,
+    revoked INTEGER DEFAULT 0,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    event_date TEXT NOT NULL,
+    start_time TEXT,
+    end_time TEXT,
+    all_day INTEGER DEFAULT 0,
+    location TEXT,
+    category TEXT NOT NULL DEFAULT 'Family',
+    recurrence_rule TEXT DEFAULT 'NONE',
+    reminder_minutes INTEGER DEFAULT 0,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS event_members (
+    event_id TEXT NOT NULL,
+    family_member_id TEXT NOT NULL,
+    PRIMARY KEY (event_id, family_member_id),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    assigned_to TEXT,
+    due_date TEXT,
+    due_time TEXT,
+    priority TEXT NOT NULL DEFAULT 'NORMAL' CHECK(priority IN ('LOW', 'NORMAL', 'HIGH')),
+    status TEXT NOT NULL DEFAULT 'TODO' CHECK(status IN ('TODO', 'IN_PROGRESS', 'COMPLETED')),
+    recurrence_rule TEXT DEFAULT 'NONE',
+    points INTEGER DEFAULT 0,
+    created_by TEXT NOT NULL,
+    completed_by TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_to) REFERENCES family_members(id) ON DELETE SET NULL,
+    FOREIGN KEY (completed_by) REFERENCES family_members(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS shopping_items (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    quantity REAL DEFAULT 1,
+    unit TEXT,
+    category TEXT NOT NULL DEFAULT 'Grocery',
+    note TEXT,
+    added_by TEXT NOT NULL,
+    purchased INTEGER DEFAULT 0,
+    purchased_by TEXT,
+    purchased_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (added_by) REFERENCES family_members(id) ON DELETE CASCADE,
+    FOREIGN KEY (purchased_by) REFERENCES family_members(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expenses (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    amount REAL NOT NULL CHECK(amount > 0),
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    paid_by TEXT NOT NULL,
+    expense_date TEXT NOT NULL,
+    note TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (paid_by) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS bills (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    amount REAL NOT NULL CHECK(amount > 0),
+    category TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    recurrence_rule TEXT DEFAULT 'MONTHLY',
+    status TEXT NOT NULL DEFAULT 'UNPAID' CHECK(status IN ('UNPAID', 'PAID', 'OVERDUE')),
+    notes TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS bill_payments (
+    id TEXT PRIMARY KEY,
+    bill_id TEXT NOT NULL,
+    family_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    paid_date TEXT NOT NULL,
+    paid_by TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (paid_by) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS rewards (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    required_points INTEGER NOT NULL CHECK(required_points > 0),
+    active INTEGER DEFAULT 1,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS points_transactions (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    family_member_id TEXT NOT NULL,
+    points INTEGER NOT NULL,
+    source_type TEXT NOT NULL,
+    source_id TEXT,
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS household_info (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    title TEXT NOT NULL,
+    value TEXT NOT NULL,
+    contact_phone TEXT,
+    notes TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    family_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    read INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS member_location_settings (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    family_member_id TEXT UNIQUE NOT NULL,
+    sharing_mode TEXT NOT NULL DEFAULT 'APP_ACTIVE' CHECK(sharing_mode IN ('OFF', 'ONCE', 'TIMED', 'APP_ACTIVE')),
+    sharing_enabled INTEGER NOT NULL DEFAULT 1,
+    sharing_expires_at TEXT,
+    history_enabled INTEGER NOT NULL DEFAULT 0,
+    retention_days INTEGER NOT NULL DEFAULT 7,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS member_current_locations (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    family_member_id TEXT UNIQUE NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    accuracy REAL NOT NULL,
+    recorded_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    source TEXT DEFAULT 'foreground',
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS member_location_history (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    family_member_id TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    accuracy REAL NOT NULL,
+    recorded_at TEXT NOT NULL,
+    source TEXT DEFAULT 'foreground',
+    created_at TEXT NOT NULL,
+    place_name TEXT,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS family_saved_places (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    radius_meters REAL NOT NULL DEFAULT 150,
+    category TEXT NOT NULL DEFAULT 'OTHER',
+    icon TEXT DEFAULT 'MapPin',
+    active INTEGER DEFAULT 1,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS location_requests (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    requester_member_id TEXT NOT NULL,
+    target_member_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'DECLINED', 'EXPIRED')),
+    requested_at TEXT NOT NULL,
+    responded_at TEXT,
+    expires_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (requester_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS location_place_alerts (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    viewer_member_id TEXT NOT NULL,
+    target_member_id TEXT NOT NULL,
+    saved_place_id TEXT NOT NULL,
+    notify_on_arrival INTEGER DEFAULT 1,
+    notify_on_leave INTEGER DEFAULT 1,
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (viewer_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
+    FOREIGN KEY (saved_place_id) REFERENCES family_saved_places(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS sos_events (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    family_member_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'RESOLVED', 'CANCELLED')),
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    initial_latitude REAL NOT NULL,
+    initial_longitude REAL NOT NULL,
+    initial_accuracy REAL NOT NULL,
+    last_latitude REAL NOT NULL,
+    last_longitude REAL NOT NULL,
+    last_accuracy REAL NOT NULL,
+    last_updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_members_family ON family_members(family_id);
+  CREATE INDEX IF NOT EXISTS idx_members_user ON family_members(user_id);
+  CREATE INDEX IF NOT EXISTS idx_events_family_date ON events(family_id, event_date);
+  CREATE INDEX IF NOT EXISTS idx_tasks_family_due ON tasks(family_id, due_date);
+  CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
+  CREATE INDEX IF NOT EXISTS idx_shopping_family ON shopping_items(family_id, purchased);
+  CREATE INDEX IF NOT EXISTS idx_expenses_family_date ON expenses(family_id, expense_date);
+  CREATE INDEX IF NOT EXISTS idx_bills_family_due ON bills(family_id, due_date);
+  CREATE INDEX IF NOT EXISTS idx_invites_code ON family_invites(invite_code);
+  CREATE INDEX IF NOT EXISTS idx_loc_curr_family ON member_current_locations(family_id);
+  CREATE INDEX IF NOT EXISTS idx_loc_hist_family_member ON member_location_history(family_id, family_member_id, recorded_at);
+  CREATE INDEX IF NOT EXISTS idx_loc_places_family ON family_saved_places(family_id);
+  CREATE INDEX IF NOT EXISTS idx_loc_req_family ON location_requests(family_id, target_member_id, status);
+  CREATE INDEX IF NOT EXISTS idx_sos_family ON sos_events(family_id, status);
+`;
+
+async function ensureTursoInitialized() {
+  if (!tursoClient) return;
+  if (tursoInitPromise) return tursoInitPromise;
+
+  tursoInitPromise = (async () => {
+    try {
+      await tursoClient.executeMultiple(DB_SCHEMA);
+      
+      const checkRes = await tursoClient.execute('SELECT count(*) as count FROM users');
+      const count = (checkRes.rows[0]?.count as number) || 0;
+      
+      if (count === 0) {
+        console.log('[Turso] Seeding initial family data...');
+        const defaultPasswordHash = '$2a$10$Nv16P04fzmOtS39pAreGk.eoDYfoVxTaBgEYDtG9ubFAMi682x61u';
+        const now = new Date().toISOString();
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const familyId = 'fam_sukjai';
+
+        const statements: any[] = [
+          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_dad', 'dad@familyhub.local', ?, 'พ่อ (สมศักดิ์)', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
+          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_mom', 'mom@familyhub.local', ?, 'แม่ (สุดา)', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
+          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_ton', 'ton@familyhub.local', ?, 'น้องต้น', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
+          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_may', 'may@familyhub.local', ?, 'น้องเมย์', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
+          { sql: `INSERT OR REPLACE INTO families VALUES (?, 'ครอบครัวสุขใจ', 'usr_dad', 'THB', 25000, 1, 'home', ?, ?)`, args: [familyId, now, now] },
+          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_dad', ?, 'usr_dad', 'ADMIN', 'พ่อ', '#0284c7', 50, ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_mom', ?, 'usr_mom', 'ADULT', 'แม่', '#ec4899', 40, ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_ton', ?, 'usr_ton', 'CHILD', 'น้องต้น', '#10b981', 120, ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_may', ?, 'usr_may', 'CHILD', 'น้องเมย์', '#8b5cf6', 85, ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO family_invites VALUES ('inv_demo', ?, 'FAM-7KX92', 'ADULT', NULL, 0, 'mem_dad', ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO events VALUES ('evt_1', ?, 'นัดหมอตรวจสุขภาพ', 'กิจกรรมครอบครัวสุขใจ', ?, '09:00', '10:30', 0, 'โรงพยาบาลกรุงเทพ', 'Health', 'NONE', 30, 'mem_dad', ?, ?)`, args: [familyId, today, now, now] },
+          { sql: `INSERT OR REPLACE INTO event_members VALUES ('evt_1', 'mem_dad')`, args: [] },
+          { sql: `INSERT OR REPLACE INTO tasks VALUES ('tsk_1', ?, 'ทิ้งขยะหน้าบ้าน', 'งานบ้านประจำวัน', 'mem_dad', ?, '08:00', 'NORMAL', 'COMPLETED', 'DAILY', 5, 'mem_dad', 'mem_dad', ?, ?, ?)`, args: [familyId, today, now, now, now] },
+          { sql: `INSERT OR REPLACE INTO shopping_items VALUES ('shp_1', ?, 'นมสดเมจิ', 2, 'ขวด', 'Grocery', '', 'mem_mom', 0, NULL, NULL, ?, ?)`, args: [familyId, now, now] },
+          { sql: `INSERT OR REPLACE INTO expenses VALUES ('exp_1', ?, 1250, 'Shopping', 'ซื้อของ Lotus ซุปเปอร์มาร์เก็ต', 'mem_dad', ?, 'ค่าใช้จ่ายครอบครัว', 'mem_dad', ?, ?)`, args: [familyId, today, now, now] },
+          { sql: `INSERT OR REPLACE INTO bills VALUES ('bil_1', ?, 'ค่าไฟ (การไฟฟ้านครหลวง)', 1850, 'Utilities', ?, 'MONTHLY', 'UNPAID', 'ตัดผ่านบัญชี/สแกนจ่าย', 'mem_dad', ?, ?)`, args: [familyId, today, now, now] },
+          { sql: `INSERT OR REPLACE INTO rewards VALUES ('rew_1', ?, 'เลือกหนังดูด้วยกันคืนนี้ 🎬', 100, 1, 'mem_dad', ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO household_info VALUES ('inf_1', ?, 'EMERGENCY', 'เบอร์นิติบุคคลหมู่บ้าน', '02-123-4567', '021234567', '', 'mem_dad', ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO family_saved_places VALUES ('place_home', ?, 'บ้านสุขใจ 🏡', 19.9072, 99.8325, 100, 'HOME', 'Home', 1, 'mem_dad', ?, ?)`, args: [familyId, now, now] },
+          { sql: `INSERT OR REPLACE INTO member_location_settings VALUES ('locset_mem_dad', ?, 'mem_dad', 'APP_ACTIVE', 1, 1, 7, ?)`, args: [familyId, now] },
+          { sql: `INSERT OR REPLACE INTO member_current_locations VALUES ('curloc_mem_dad', ?, 'mem_dad', 19.9072, 99.8325, 12, ?, ?, 'foreground')`, args: [familyId, now, now] },
+        ];
+
+        await tursoClient.batch(statements, 'write');
+        console.log('[Turso] Database seeded successfully.');
+      }
+    } catch (err) {
+      console.error('[Turso] Init error:', err);
+    }
+  })();
+
+  return tursoInitPromise;
+}
+
+// Local Sqlite getDb (fallback)
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
-
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
@@ -67,8 +476,9 @@ export async function getDb(): Promise<Database> {
         dbInstance = new SQL.Database();
       }
 
-      // Initialize Schema
-      initSchema(dbInstance);
+      dbInstance.run('PRAGMA foreign_keys = ON;');
+      dbInstance.exec(DB_SCHEMA);
+      initLocalSeedIfEmpty(dbInstance);
       saveDatabase();
       return dbInstance;
     } catch (err) {
@@ -82,375 +492,7 @@ export async function getDb(): Promise<Database> {
   return initPromise;
 }
 
-function initSchema(db: Database) {
-  db.run('PRAGMA foreign_keys = ON;');
-
-  const schema = `
-    -- Users Table
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      avatar_url TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    -- Families Table
-    CREATE TABLE IF NOT EXISTS families (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      owner_id TEXT NOT NULL,
-      currency TEXT DEFAULT 'THB',
-      monthly_budget REAL DEFAULT 0,
-      rewards_enabled INTEGER DEFAULT 1,
-      avatar_icon TEXT DEFAULT 'home',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    -- Family Members Table
-    CREATE TABLE IF NOT EXISTS family_members (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('ADMIN', 'ADULT', 'CHILD')),
-      nickname TEXT NOT NULL,
-      member_color TEXT NOT NULL DEFAULT '#3b82f6',
-      points_balance INTEGER NOT NULL DEFAULT 0,
-      joined_at TEXT NOT NULL,
-      UNIQUE(family_id, user_id),
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    -- Family Invites Table
-    CREATE TABLE IF NOT EXISTS family_invites (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      invite_code TEXT UNIQUE NOT NULL,
-      role TEXT NOT NULL DEFAULT 'ADULT' CHECK(role IN ('ADMIN', 'ADULT', 'CHILD')),
-      expires_at TEXT,
-      revoked INTEGER DEFAULT 0,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Calendar Events Table
-    CREATE TABLE IF NOT EXISTS events (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      event_date TEXT NOT NULL,
-      start_time TEXT,
-      end_time TEXT,
-      all_day INTEGER DEFAULT 0,
-      location TEXT,
-      category TEXT NOT NULL DEFAULT 'Family',
-      recurrence_rule TEXT DEFAULT 'NONE',
-      reminder_minutes INTEGER DEFAULT 0,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Event Attendees Mapping Table
-    CREATE TABLE IF NOT EXISTS event_members (
-      event_id TEXT NOT NULL,
-      family_member_id TEXT NOT NULL,
-      PRIMARY KEY (event_id, family_member_id),
-      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Household Tasks Table
-    CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      assigned_to TEXT,
-      due_date TEXT,
-      due_time TEXT,
-      priority TEXT NOT NULL DEFAULT 'NORMAL' CHECK(priority IN ('LOW', 'NORMAL', 'HIGH')),
-      status TEXT NOT NULL DEFAULT 'TODO' CHECK(status IN ('TODO', 'IN_PROGRESS', 'COMPLETED')),
-      recurrence_rule TEXT DEFAULT 'NONE',
-      points INTEGER DEFAULT 0,
-      created_by TEXT NOT NULL,
-      completed_by TEXT,
-      completed_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (assigned_to) REFERENCES family_members(id) ON DELETE SET NULL,
-      FOREIGN KEY (completed_by) REFERENCES family_members(id) ON DELETE SET NULL
-    );
-
-    -- Shopping Items Table
-    CREATE TABLE IF NOT EXISTS shopping_items (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      quantity REAL DEFAULT 1,
-      unit TEXT,
-      category TEXT NOT NULL DEFAULT 'Grocery',
-      note TEXT,
-      added_by TEXT NOT NULL,
-      purchased INTEGER DEFAULT 0,
-      purchased_by TEXT,
-      purchased_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (added_by) REFERENCES family_members(id) ON DELETE CASCADE,
-      FOREIGN KEY (purchased_by) REFERENCES family_members(id) ON DELETE SET NULL
-    );
-
-    -- Expenses Table
-    CREATE TABLE IF NOT EXISTS expenses (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      amount REAL NOT NULL CHECK(amount > 0),
-      category TEXT NOT NULL,
-      description TEXT NOT NULL,
-      paid_by TEXT NOT NULL,
-      expense_date TEXT NOT NULL,
-      note TEXT,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (paid_by) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Bills Table
-    CREATE TABLE IF NOT EXISTS bills (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      amount REAL NOT NULL CHECK(amount > 0),
-      category TEXT NOT NULL,
-      due_date TEXT NOT NULL,
-      recurrence_rule TEXT DEFAULT 'MONTHLY',
-      status TEXT NOT NULL DEFAULT 'UNPAID' CHECK(status IN ('UNPAID', 'PAID', 'OVERDUE')),
-      notes TEXT,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Bill Payments History Table
-    CREATE TABLE IF NOT EXISTS bill_payments (
-      id TEXT PRIMARY KEY,
-      bill_id TEXT NOT NULL,
-      family_id TEXT NOT NULL,
-      amount REAL NOT NULL,
-      paid_date TEXT NOT NULL,
-      paid_by TEXT NOT NULL,
-      note TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (paid_by) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Rewards Catalog Table
-    CREATE TABLE IF NOT EXISTS rewards (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      required_points INTEGER NOT NULL CHECK(required_points > 0),
-      active INTEGER DEFAULT 1,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Points Ledger Table
-    CREATE TABLE IF NOT EXISTS points_transactions (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      family_member_id TEXT NOT NULL,
-      points INTEGER NOT NULL,
-      source_type TEXT NOT NULL,
-      source_id TEXT,
-      description TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Household Info Table
-    CREATE TABLE IF NOT EXISTS household_info (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      category TEXT NOT NULL,
-      title TEXT NOT NULL,
-      value TEXT NOT NULL,
-      contact_phone TEXT,
-      notes TEXT,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Notifications Table
-    CREATE TABLE IF NOT EXISTS notifications (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      family_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      read INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Member Location Settings Table
-    CREATE TABLE IF NOT EXISTS member_location_settings (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      family_member_id TEXT UNIQUE NOT NULL,
-      sharing_mode TEXT NOT NULL DEFAULT 'APP_ACTIVE' CHECK(sharing_mode IN ('OFF', 'ONCE', 'TIMED', 'APP_ACTIVE')),
-      sharing_enabled INTEGER NOT NULL DEFAULT 1,
-      sharing_expires_at TEXT,
-      history_enabled INTEGER NOT NULL DEFAULT 0,
-      retention_days INTEGER NOT NULL DEFAULT 7,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Member Latest Current Location Table
-    CREATE TABLE IF NOT EXISTS member_current_locations (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      family_member_id TEXT UNIQUE NOT NULL,
-      latitude REAL NOT NULL,
-      longitude REAL NOT NULL,
-      accuracy REAL NOT NULL,
-      recorded_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      source TEXT DEFAULT 'foreground',
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Member Location History Table
-    CREATE TABLE IF NOT EXISTS member_location_history (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      family_member_id TEXT NOT NULL,
-      latitude REAL NOT NULL,
-      longitude REAL NOT NULL,
-      accuracy REAL NOT NULL,
-      recorded_at TEXT NOT NULL,
-      source TEXT DEFAULT 'foreground',
-      created_at TEXT NOT NULL,
-      place_name TEXT,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Family Saved Places Table
-    CREATE TABLE IF NOT EXISTS family_saved_places (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      latitude REAL NOT NULL,
-      longitude REAL NOT NULL,
-      radius_meters REAL NOT NULL DEFAULT 150,
-      category TEXT NOT NULL DEFAULT 'OTHER',
-      icon TEXT DEFAULT 'MapPin',
-      active INTEGER DEFAULT 1,
-      created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
-    );
-
-    -- Location Requests Table
-    CREATE TABLE IF NOT EXISTS location_requests (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      requester_member_id TEXT NOT NULL,
-      target_member_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'DECLINED', 'EXPIRED')),
-      requested_at TEXT NOT NULL,
-      responded_at TEXT,
-      expires_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (requester_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
-      FOREIGN KEY (target_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Location Place Alerts Table
-    CREATE TABLE IF NOT EXISTS location_place_alerts (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      viewer_member_id TEXT NOT NULL,
-      target_member_id TEXT NOT NULL,
-      saved_place_id TEXT NOT NULL,
-      notify_on_arrival INTEGER DEFAULT 1,
-      notify_on_leave INTEGER DEFAULT 1,
-      active INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (viewer_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
-      FOREIGN KEY (target_member_id) REFERENCES family_members(id) ON DELETE CASCADE,
-      FOREIGN KEY (saved_place_id) REFERENCES family_saved_places(id) ON DELETE CASCADE
-    );
-
-    -- SOS Events Table
-    CREATE TABLE IF NOT EXISTS sos_events (
-      id TEXT PRIMARY KEY,
-      family_id TEXT NOT NULL,
-      family_member_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'RESOLVED', 'CANCELLED')),
-      started_at TEXT NOT NULL,
-      ended_at TEXT,
-      initial_latitude REAL NOT NULL,
-      initial_longitude REAL NOT NULL,
-      initial_accuracy REAL NOT NULL,
-      last_latitude REAL NOT NULL,
-      last_longitude REAL NOT NULL,
-      last_accuracy REAL NOT NULL,
-      last_updated_at TEXT NOT NULL,
-      FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
-      FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
-    );
-
-    -- Indexes for High Performance & Query Isolation
-    CREATE INDEX IF NOT EXISTS idx_members_family ON family_members(family_id);
-    CREATE INDEX IF NOT EXISTS idx_members_user ON family_members(user_id);
-    CREATE INDEX IF NOT EXISTS idx_events_family_date ON events(family_id, event_date);
-    CREATE INDEX IF NOT EXISTS idx_tasks_family_due ON tasks(family_id, due_date);
-    CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
-    CREATE INDEX IF NOT EXISTS idx_shopping_family ON shopping_items(family_id, purchased);
-    CREATE INDEX IF NOT EXISTS idx_expenses_family_date ON expenses(family_id, expense_date);
-    CREATE INDEX IF NOT EXISTS idx_bills_family_due ON bills(family_id, due_date);
-    CREATE INDEX IF NOT EXISTS idx_invites_code ON family_invites(invite_code);
-    CREATE INDEX IF NOT EXISTS idx_loc_curr_family ON member_current_locations(family_id);
-    CREATE INDEX IF NOT EXISTS idx_loc_hist_family_member ON member_location_history(family_id, family_member_id, recorded_at);
-    CREATE INDEX IF NOT EXISTS idx_loc_places_family ON family_saved_places(family_id);
-    CREATE INDEX IF NOT EXISTS idx_loc_req_family ON location_requests(family_id, target_member_id, status);
-    CREATE INDEX IF NOT EXISTS idx_sos_family ON sos_events(family_id, status);
-  `;
-
-  db.exec(schema);
-  initSeedIfEmpty(db);
-}
-
-function initSeedIfEmpty(db: Database) {
+function initLocalSeedIfEmpty(db: Database) {
   try {
     const checkStmt = db.prepare('SELECT count(*) as count FROM users');
     let userCount = 0;
@@ -459,16 +501,13 @@ function initSeedIfEmpty(db: Database) {
     }
     checkStmt.free();
 
-    if (userCount > 0) {
-      return;
-    }
+    if (userCount > 0) return;
 
     const defaultPasswordHash = '$2a$10$Nv16P04fzmOtS39pAreGk.eoDYfoVxTaBgEYDtG9ubFAMi682x61u';
     const now = new Date().toISOString();
     const d = new Date();
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    // 1. Users
     const users = [
       { id: 'usr_dad', email: 'dad@familyhub.local', name: 'พ่อ (สมศักดิ์)' },
       { id: 'usr_mom', email: 'mom@familyhub.local', name: 'แม่ (สุดา)' },
@@ -477,21 +516,17 @@ function initSeedIfEmpty(db: Database) {
     ];
     for (const u of users) {
       db.run(
-        `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+        `INSERT OR REPLACE INTO users VALUES (?, ?, ?, ?, NULL, ?, ?)`,
         [u.id, u.email, defaultPasswordHash, u.name, now, now]
       );
     }
 
-    // 2. Family
     const familyId = 'fam_sukjai';
     db.run(
-      `INSERT OR REPLACE INTO families (id, name, owner_id, currency, monthly_budget, rewards_enabled, avatar_icon, created_at, updated_at)
-     VALUES (?, ?, ?, 'THB', 25000, 1, 'home', ?, ?)`,
-      [familyId, 'ครอบครัวสุขใจ', 'usr_dad', now, now]
+      `INSERT OR REPLACE INTO families VALUES (?, 'ครอบครัวสุขใจ', 'usr_dad', 'THB', 25000, 1, 'home', ?, ?)`,
+      [familyId, now, now]
     );
 
-    // 3. Members
     const members = [
       { id: 'mem_dad', userId: 'usr_dad', role: 'ADMIN', nick: 'พ่อ', color: '#0284c7', pts: 50 },
       { id: 'mem_mom', userId: 'usr_mom', role: 'ADULT', nick: 'แม่', color: '#ec4899', pts: 40 },
@@ -500,171 +535,31 @@ function initSeedIfEmpty(db: Database) {
     ];
     for (const m of members) {
       db.run(
-        `INSERT OR REPLACE INTO family_members (id, family_id, user_id, role, nickname, member_color, points_balance, joined_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO family_members VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [m.id, familyId, m.userId, m.role, m.nick, m.color, m.pts, now]
       );
     }
 
-    // 4. Invites
     db.run(
-      `INSERT OR REPLACE INTO family_invites (id, family_id, invite_code, role, expires_at, revoked, created_by, created_at)
-       VALUES ('inv_demo', ?, 'FAM-7KX92', 'ADULT', NULL, 0, 'mem_dad', ?)`,
+      `INSERT OR REPLACE INTO family_invites VALUES ('inv_demo', ?, 'FAM-7KX92', 'ADULT', NULL, 0, 'mem_dad', ?)`,
       [familyId, now]
     );
-
-    // 5. Events
-    const events = [
-      { id: 'evt_1', title: 'นัดหมอตรวจสุขภาพ', time: '09:00', end: '10:30', cat: 'Health', loc: 'โรงพยาบาลกรุงเทพ', mem: 'mem_dad' },
-      { id: 'evt_2', title: 'รับลูกที่โรงเรียน', time: '16:30', end: '17:15', cat: 'School', loc: 'โรงเรียนสาธิต', mem: 'mem_mom' },
-      { id: 'evt_3', title: 'Family Dinner', time: '19:00', end: '20:30', cat: 'Family', loc: 'ร้านอาหารบ้านสวน', mem: 'mem_dad' },
-    ];
-    for (const e of events) {
-      db.run(
-        `INSERT OR REPLACE INTO events (id, family_id, title, description, event_date, start_time, end_time, all_day, location, category, recurrence_rule, reminder_minutes, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, 'กิจกรรมครอบครัวสุขใจ', ?, ?, ?, 0, ?, ?, 'NONE', 30, 'mem_dad', ?, ?)`,
-        [e.id, familyId, e.title, today, e.time, e.end, e.loc, e.cat, now, now]
-      );
-      db.run('INSERT OR REPLACE INTO event_members (event_id, family_member_id) VALUES (?, ?)', [e.id, e.mem]);
-    }
-
-    // 6. Tasks
-    const tasks = [
-      { id: 'tsk_1', title: 'ทิ้งขยะหน้าบ้าน', assign: 'mem_dad', time: '08:00', prio: 'NORMAL', status: 'COMPLETED', pts: 5 },
-      { id: 'tsk_2', title: 'ซื้ออาหารแมว', assign: 'mem_mom', time: '15:00', prio: 'NORMAL', status: 'TODO', pts: 10 },
-      { id: 'tsk_3', title: 'ทำการบ้านวิชาคณิตศาสตร์', assign: 'mem_ton', time: '18:00', prio: 'HIGH', status: 'IN_PROGRESS', pts: 20 },
-      { id: 'tsk_4', title: 'จัดโต๊ะอาหารเย็น', assign: 'mem_may', time: '18:45', prio: 'LOW', status: 'TODO', pts: 10 },
-    ];
-    for (const t of tasks) {
-      db.run(
-        `INSERT OR REPLACE INTO tasks (id, family_id, title, description, assigned_to, due_date, due_time, priority, status, recurrence_rule, points, created_by, completed_by, completed_at, created_at, updated_at)
-         VALUES (?, ?, ?, 'งานบ้านประจำวัน', ?, ?, ?, ?, ?, 'DAILY', ?, 'mem_dad', ?, ?, ?, ?)`,
-        [t.id, familyId, t.title, t.assign, today, t.time, t.prio, t.status, t.pts, t.status === 'COMPLETED' ? t.assign : null, t.status === 'COMPLETED' ? now : null, now, now]
-      );
-    }
-
-    // 7. Shopping Items
-    const shopping = [
-      { id: 'shp_1', name: 'นมสดเมจิ', qty: 2, unit: 'ขวด', cat: 'Grocery', done: 0 },
-      { id: 'shp_2', name: 'ไข่ไก่เบอร์ 1', qty: 1, unit: 'แผง', cat: 'Grocery', done: 0 },
-      { id: 'shp_3', name: 'ข้าวหอมมะลิ 5 กก.', qty: 1, unit: 'ถุง', cat: 'Grocery', done: 0 },
-      { id: 'shp_4', name: 'น้ำดื่มแพ็ค 6 ขวด', qty: 2, unit: 'แพ็ค', cat: 'Grocery', done: 0 },
-      { id: 'shp_5', name: 'แชมพูสระผม', qty: 1, unit: 'ขวด', cat: 'Personal', done: 1 },
-      { id: 'shp_6', name: 'กระดาษชำระ', qty: 1, unit: 'แพ็ค', cat: 'Household', done: 1 },
-    ];
-    for (const s of shopping) {
-      db.run(
-        `INSERT OR REPLACE INTO shopping_items (id, family_id, name, quantity, unit, category, note, added_by, purchased, purchased_by, purchased_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, '', 'mem_mom', ?, ?, ?, ?, ?)`,
-        [s.id, familyId, s.name, s.qty, s.unit, s.cat, s.done, s.done ? 'mem_dad' : null, s.done ? now : null, now, now]
-      );
-    }
-
-    // 8. Expenses
-    const expenses = [
-      { id: 'exp_1', amount: 1250, cat: 'Shopping', desc: 'ซื้อของ Lotus ซุปเปอร์มาร์เก็ต', paidBy: 'mem_dad' },
-      { id: 'exp_2', amount: 1850, cat: 'Utilities', desc: 'ค่าไฟประจำเดือน', paidBy: 'mem_mom' },
-      { id: 'exp_3', amount: 1000, cat: 'Transport', desc: 'เติมน้ำมันรถยนต์', paidBy: 'mem_dad' },
-      { id: 'exp_4', amount: 450, cat: 'Food', desc: 'มื้อกลางวันครอบครัว', paidBy: 'mem_mom' },
-    ];
-    for (const exp of expenses) {
-      db.run(
-        `INSERT OR REPLACE INTO expenses (id, family_id, amount, category, description, paid_by, expense_date, note, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'ค่าใช้จ่ายครอบครัว', 'mem_dad', ?, ?)`,
-        [exp.id, familyId, exp.amount, exp.cat, exp.desc, exp.paidBy, today, now, now]
-      );
-    }
-
-    // 9. Bills
-    const bills = [
-      { id: 'bil_1', name: 'ค่าไฟ (การไฟฟ้านครหลวง)', amount: 1850, cat: 'Utilities', due: today, repeat: 'MONTHLY', status: 'UNPAID' },
-      { id: 'bil_2', name: 'อินเทอร์เน็ตบ้าน Fiber 1000/1000', amount: 699, cat: 'Utilities', due: today, repeat: 'MONTHLY', status: 'UNPAID' },
-      { id: 'bil_3', name: 'ค่าน้ำประปา', amount: 280, cat: 'Utilities', due: today, repeat: 'MONTHLY', status: 'PAID' },
-    ];
-    for (const b of bills) {
-      db.run(
-        `INSERT OR REPLACE INTO bills (id, family_id, name, amount, category, due_date, recurrence_rule, status, notes, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ตัดผ่านบัญชี/สแกนจ่าย', 'mem_dad', ?, ?)`,
-        [b.id, familyId, b.name, b.amount, b.cat, b.due, b.repeat, b.status, now, now]
-      );
-    }
-
-    // 10. Rewards
-    const rewards = [
-      { id: 'rew_1', name: 'เลือกหนังดูด้วยกันคืนนี้ 🎬', pts: 100 },
-      { id: 'rew_2', name: 'เวลาเล่นเกมเพิ่ม 1 ชั่วโมง 🎮', pts: 200 },
-      { id: 'rew_3', name: 'ทริปเที่ยวสวนน้ำครอบครัว 🌊', pts: 500 },
-    ];
-    for (const r of rewards) {
-      db.run(
-        `INSERT OR REPLACE INTO rewards (id, family_id, name, required_points, active, created_by, created_at)
-         VALUES (?, ?, ?, ?, 1, 'mem_dad', ?)`,
-        [r.id, familyId, r.name, r.pts, now]
-      );
-    }
-
-    // 11. Household Info
-    const infos = [
-      { id: 'inf_1', cat: 'EMERGENCY', title: 'เบอร์นิติบุคคลหมู่บ้าน', val: '02-123-4567', phone: '021234567' },
-      { id: 'inf_2', cat: 'UTILITY', title: 'รหัส Wi-Fi ประจำบ้าน', val: 'HomeHappy2026! (5GHz/2.4GHz)', phone: '' },
-      { id: 'inf_3', cat: 'DEVICE', title: 'ช่างล้างแอร์ประจำ (ช่างสมชาย)', val: 'แอร์ห้องนั่งเล่น + ห้องนอนใหญ่', phone: '0899998888' },
-    ];
-    for (const info of infos) {
-      db.run(
-        `INSERT OR REPLACE INTO household_info (id, family_id, category, title, value, contact_phone, notes, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, '', 'mem_dad', ?)`,
-        [info.id, familyId, info.cat, info.title, info.val, info.phone, now]
-      );
-    }
-
-    // 12. Saved Places
-    const savedPlaces = [
-      { id: 'place_home', name: 'บ้านสุขใจ 🏡', lat: 19.9072, lon: 99.8325, rad: 100, cat: 'HOME', icon: 'Home' },
-      { id: 'place_school', name: 'โรงเรียนสาธิตฯ 🏫', lat: 19.9150, lon: 99.8400, rad: 150, cat: 'SCHOOL', icon: 'GraduationCap' },
-      { id: 'place_mall', name: 'Central Chiang Rai 🛍️', lat: 19.8962, lon: 99.8327, rad: 200, cat: 'OTHER', icon: 'ShoppingBag' },
-      { id: 'place_work', name: 'ที่ทำงาน / สำนักงาน 🏢', lat: 19.9200, lon: 99.8250, rad: 150, cat: 'WORK', icon: 'Briefcase' },
-    ];
-    for (const p of savedPlaces) {
-      db.run(
-        `INSERT OR REPLACE INTO family_saved_places (id, family_id, name, latitude, longitude, radius_meters, category, icon, active, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 'mem_dad', ?, ?)`,
-        [p.id, familyId, p.name, p.lat, p.lon, p.rad, p.cat, p.icon, now, now]
-      );
-    }
-
-    // 13. Location settings & current locations
-    const memberLocs = [
-      { memberId: 'mem_dad', lat: 19.9072, lon: 99.8325, acc: 12, mode: 'APP_ACTIVE', place: 'บ้านสุขใจ' },
-      { memberId: 'mem_mom', lat: 19.8962, lon: 99.8326, acc: 18, mode: 'APP_ACTIVE', place: 'Central Chiang Rai' },
-      { memberId: 'mem_ton', lat: 19.9150, lon: 99.8400, acc: 15, mode: 'APP_ACTIVE', place: 'โรงเรียนสาธิตฯ' },
-      { memberId: 'mem_may', lat: 19.9072, lon: 99.8325, acc: 14, mode: 'APP_ACTIVE', place: 'บ้านสุขใจ' },
-    ];
-    for (const m of memberLocs) {
-      db.run(
-        `INSERT OR REPLACE INTO member_location_settings (id, family_id, family_member_id, sharing_mode, sharing_enabled, history_enabled, retention_days, updated_at)
-         VALUES (?, ?, ?, ?, 1, 1, 7, ?)`,
-        [`locset_${m.memberId}`, familyId, m.memberId, m.mode, now]
-      );
-      db.run(
-        `INSERT OR REPLACE INTO member_current_locations (id, family_id, family_member_id, latitude, longitude, accuracy, recorded_at, updated_at, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'foreground')`,
-        [`curloc_${m.memberId}`, familyId, m.memberId, m.lat, m.lon, m.acc, now, now]
-      );
-      db.run(
-        `INSERT OR REPLACE INTO member_location_history (id, family_id, family_member_id, latitude, longitude, accuracy, recorded_at, source, created_at, place_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'foreground', ?, ?)`,
-        [`hist_${m.memberId}_1`, familyId, m.memberId, m.lat, m.lon, m.acc, now, now, m.place]
-      );
-    }
   } catch (err) {
     console.error('[DB] Auto-seed error:', err);
   }
 }
 
-// Database helper functions
+// Universal Query helpers
 export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-  const db = await getDb();
   const cleanParams = params.map((p) => (p === undefined ? null : p));
+
+  if (isTursoEnabled && tursoClient) {
+    await ensureTursoInitialized();
+    const res = await tursoClient.execute({ sql, args: cleanParams });
+    return res.rows as unknown as T[];
+  }
+
+  const db = await getDb();
   const stmt = db.prepare(sql);
   stmt.bind(cleanParams);
   const results: T[] = [];
@@ -681,14 +576,23 @@ export async function queryOne<T = any>(sql: string, params: any[] = []): Promis
 }
 
 export async function execute(sql: string, params: any[] = []): Promise<void> {
-  const db = await getDb();
   const cleanParams = params.map((p) => (p === undefined ? null : p));
+
+  if (isTursoEnabled && tursoClient) {
+    await ensureTursoInitialized();
+    await tursoClient.execute({ sql, args: cleanParams });
+    return;
+  }
+
+  const db = await getDb();
   db.run(sql, cleanParams);
   saveDatabase();
 }
 
 export async function transaction<T>(callback: () => Promise<T> | T): Promise<T> {
   const result = await callback();
-  saveDatabase();
+  if (!isTursoEnabled) {
+    saveDatabase();
+  }
   return result;
 }
