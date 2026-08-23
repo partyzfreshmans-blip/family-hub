@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, Users, PlusCircle, KeyRound, ArrowRight } from 'lucide-react';
+import { Home, Users, PlusCircle, KeyRound, ArrowRight, ArrowLeft, LogOut } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
 
 export default function OnboardingPage() {
   const { t } = useLanguage();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const router = useRouter();
 
   const [mode, setMode] = useState<'select' | 'create' | 'join'>('select');
@@ -125,6 +125,17 @@ export default function OnboardingPage() {
                   </p>
                 </div>
               </button>
+
+              <div className="pt-2 border-t border-border/60">
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="w-full py-2.5 rounded-2xl border border-border/80 text-xs font-bold text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>ออกจากระบบ / กลับหน้าล็อกอิน</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -158,9 +169,10 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setMode('select')}
-                  className="w-1/3 py-2.5 rounded-2xl border border-border text-xs font-bold hover:bg-muted transition-colors"
+                  className="w-1/3 py-2.5 rounded-2xl border border-border text-xs font-bold hover:bg-muted transition-colors flex items-center justify-center gap-1"
                 >
-                  {t.common.back}
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{t.common.back}</span>
                 </button>
                 <button
                   type="submit"
@@ -204,9 +216,10 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setMode('select')}
-                  className="w-1/3 py-2.5 rounded-2xl border border-border text-xs font-bold hover:bg-muted transition-colors"
+                  className="w-1/3 py-2.5 rounded-2xl border border-border text-xs font-bold hover:bg-muted transition-colors flex items-center justify-center gap-1"
                 >
-                  {t.common.back}
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{t.common.back}</span>
                 </button>
                 <button
                   type="submit"
