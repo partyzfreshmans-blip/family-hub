@@ -389,7 +389,7 @@ async function ensureTursoInitialized() {
     try {
       await tursoClient.executeMultiple(DB_SCHEMA);
       
-      const checkRes = await tursoClient.execute('SELECT count(*) as count FROM users');
+      const checkRes = await tursoClient.execute('SELECT count(*) as count FROM families');
       const count = (checkRes.rows[0]?.count as number) || 0;
       
       if (count === 0) {
@@ -401,27 +401,27 @@ async function ensureTursoInitialized() {
         const familyId = 'fam_sukjai';
 
         const statements: any[] = [
-          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_dad', 'dad@familyhub.local', ?, 'พ่อ (สมศักดิ์)', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
-          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_mom', 'mom@familyhub.local', ?, 'แม่ (สุดา)', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
-          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_ton', 'ton@familyhub.local', ?, 'น้องต้น', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
-          { sql: `INSERT OR REPLACE INTO users VALUES ('usr_may', 'may@familyhub.local', ?, 'น้องเมย์', NULL, ?, ?)`, args: [defaultPasswordHash, now, now] },
-          { sql: `INSERT OR REPLACE INTO families VALUES (?, 'ครอบครัวสุขใจ', 'usr_dad', 'THB', 25000, 1, 'home', ?, ?)`, args: [familyId, now, now] },
-          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_dad', ?, 'usr_dad', 'ADMIN', 'พ่อ', '#0284c7', 50, ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_mom', ?, 'usr_mom', 'ADULT', 'แม่', '#ec4899', 40, ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_ton', ?, 'usr_ton', 'CHILD', 'น้องต้น', '#10b981', 120, ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO family_members VALUES ('mem_may', ?, 'usr_may', 'CHILD', 'น้องเมย์', '#8b5cf6', 85, ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO family_invites VALUES ('inv_demo', ?, 'FAM-7KX92', 'ADULT', NULL, 0, 'mem_dad', ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO events VALUES ('evt_1', ?, 'นัดหมอตรวจสุขภาพ', 'กิจกรรมครอบครัวสุขใจ', ?, '09:00', '10:30', 0, 'โรงพยาบาลกรุงเทพ', 'Health', 'NONE', 30, 'mem_dad', ?, ?)`, args: [familyId, today, now, now] },
-          { sql: `INSERT OR REPLACE INTO event_members VALUES ('evt_1', 'mem_dad')`, args: [] },
-          { sql: `INSERT OR REPLACE INTO tasks VALUES ('tsk_1', ?, 'ทิ้งขยะหน้าบ้าน', 'งานบ้านประจำวัน', 'mem_dad', ?, '08:00', 'NORMAL', 'COMPLETED', 'DAILY', 5, 'mem_dad', 'mem_dad', ?, ?, ?)`, args: [familyId, today, now, now, now] },
-          { sql: `INSERT OR REPLACE INTO shopping_items VALUES ('shp_1', ?, 'นมสดเมจิ', 2, 'ขวด', 'Grocery', '', 'mem_mom', 0, NULL, NULL, ?, ?)`, args: [familyId, now, now] },
-          { sql: `INSERT OR REPLACE INTO expenses VALUES ('exp_1', ?, 1250, 'Shopping', 'ซื้อของ Lotus ซุปเปอร์มาร์เก็ต', 'mem_dad', ?, 'ค่าใช้จ่ายครอบครัว', 'mem_dad', ?, ?)`, args: [familyId, today, now, now] },
-          { sql: `INSERT OR REPLACE INTO bills VALUES ('bil_1', ?, 'ค่าไฟ (การไฟฟ้านครหลวง)', 1850, 'Utilities', ?, 'MONTHLY', 'UNPAID', 'ตัดผ่านบัญชี/สแกนจ่าย', 'mem_dad', ?, ?)`, args: [familyId, today, now, now] },
-          { sql: `INSERT OR REPLACE INTO rewards VALUES ('rew_1', ?, 'เลือกหนังดูด้วยกันคืนนี้ 🎬', 100, 1, 'mem_dad', ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO household_info VALUES ('inf_1', ?, 'EMERGENCY', 'เบอร์นิติบุคคลหมู่บ้าน', '02-123-4567', '021234567', '', 'mem_dad', ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO family_saved_places VALUES ('place_home', ?, 'บ้านสุขใจ 🏡', 19.9072, 99.8325, 100, 'HOME', 'Home', 1, 'mem_dad', ?, ?)`, args: [familyId, now, now] },
-          { sql: `INSERT OR REPLACE INTO member_location_settings VALUES ('locset_mem_dad', ?, 'mem_dad', 'APP_ACTIVE', 1, 1, 7, ?)`, args: [familyId, now] },
-          { sql: `INSERT OR REPLACE INTO member_current_locations VALUES ('curloc_mem_dad', ?, 'mem_dad', 19.9072, 99.8325, 12, ?, ?, 'foreground')`, args: [familyId, now, now] },
+          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_dad', 'dad@familyhub.local', defaultPasswordHash, 'พ่อ (สมศักดิ์)', now, now] },
+          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_mom', 'mom@familyhub.local', defaultPasswordHash, 'แม่ (สุดา)', now, now] },
+          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_ton', 'ton@familyhub.local', defaultPasswordHash, 'น้องต้น', now, now] },
+          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_may', 'may@familyhub.local', defaultPasswordHash, 'น้องเมย์', now, now] },
+          { sql: `INSERT OR REPLACE INTO families (id, name, owner_id, currency, monthly_budget, rewards_enabled, avatar_icon, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: [familyId, 'ครอบครัวสุขใจ', 'usr_dad', 'THB', 25000, 1, 'home', now, now] },
+          { sql: `INSERT OR REPLACE INTO family_members (id, family_id, user_id, role, nickname, member_color, points_balance, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, args: ['mem_dad', familyId, 'usr_dad', 'ADMIN', 'พ่อ', '#0284c7', 50, now] },
+          { sql: `INSERT OR REPLACE INTO family_members (id, family_id, user_id, role, nickname, member_color, points_balance, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, args: ['mem_mom', familyId, 'usr_mom', 'ADULT', 'แม่', '#ec4899', 40, now] },
+          { sql: `INSERT OR REPLACE INTO family_members (id, family_id, user_id, role, nickname, member_color, points_balance, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, args: ['mem_ton', familyId, 'usr_ton', 'CHILD', 'น้องต้น', '#10b981', 120, now] },
+          { sql: `INSERT OR REPLACE INTO family_members (id, family_id, user_id, role, nickname, member_color, points_balance, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, args: ['mem_may', familyId, 'usr_may', 'CHILD', 'น้องเมย์', '#8b5cf6', 85, now] },
+          { sql: `INSERT OR REPLACE INTO family_invites (id, family_id, invite_code, role, expires_at, revoked, created_by, created_at) VALUES (?, ?, ?, ?, NULL, 0, ?, ?)`, args: ['inv_demo', familyId, 'FAM-7KX92', 'ADULT', 'mem_dad', now] },
+          { sql: `INSERT OR REPLACE INTO events (id, family_id, title, description, event_date, start_time, end_time, all_day, location, category, recurrence_rule, reminder_minutes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['evt_1', familyId, 'นัดหมอตรวจสุขภาพ', 'กิจกรรมครอบครัวสุขใจ', today, '09:00', '10:30', 0, 'โรงพยาบาลกรุงเทพ', 'Health', 'NONE', 30, 'mem_dad', now, now] },
+          { sql: `INSERT OR REPLACE INTO event_members (event_id, family_member_id) VALUES (?, ?)`, args: ['evt_1', 'mem_dad'] },
+          { sql: `INSERT OR REPLACE INTO tasks (id, family_id, title, description, assigned_to, due_date, due_time, priority, status, recurrence_rule, points, created_by, completed_by, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['tsk_1', familyId, 'ทิ้งขยะหน้าบ้าน', 'งานบ้านประจำวัน', 'mem_dad', today, '08:00', 'NORMAL', 'COMPLETED', 'DAILY', 5, 'mem_dad', 'mem_dad', now, now, now] },
+          { sql: `INSERT OR REPLACE INTO shopping_items (id, family_id, name, quantity, unit, category, note, added_by, purchased, purchased_by, purchased_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['shp_1', familyId, 'นมสดเมจิ', 2, 'ขวด', 'Grocery', '', 'mem_mom', 0, null, null, now, now] },
+          { sql: `INSERT OR REPLACE INTO expenses (id, family_id, amount, category, description, paid_by, expense_date, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['exp_1', familyId, 1250, 'Shopping', 'ซื้อของ Lotus ซุปเปอร์มาร์เก็ต', 'mem_dad', today, 'ค่าใช้จ่ายครอบครัว', 'mem_dad', now, now] },
+          { sql: `INSERT OR REPLACE INTO bills (id, family_id, name, amount, category, due_date, recurrence_rule, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['bil_1', familyId, 'ค่าไฟ (การไฟฟ้านครหลวง)', 1850, 'Utilities', today, 'MONTHLY', 'UNPAID', 'ตัดผ่านบัญชี/สแกนจ่าย', 'mem_dad', now, now] },
+          { sql: `INSERT OR REPLACE INTO rewards (id, family_id, name, required_points, active, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, args: ['rew_1', familyId, 'เลือกหนังดูด้วยกันคืนนี้ 🎬', 100, 1, 'mem_dad', now] },
+          { sql: `INSERT OR REPLACE INTO household_info (id, family_id, category, title, value, contact_phone, notes, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['inf_1', familyId, 'EMERGENCY', 'เบอร์นิติบุคคลหมู่บ้าน', '02-123-4567', '021234567', '', 'mem_dad', now] },
+          { sql: `INSERT OR REPLACE INTO family_saved_places (id, family_id, name, latitude, longitude, radius_meters, category, icon, active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['place_home', familyId, 'บ้านสุขใจ 🏡', 19.9072, 99.8325, 100, 'HOME', 'Home', 1, 'mem_dad', now, now] },
+          { sql: `INSERT OR REPLACE INTO member_location_settings (id, family_id, family_member_id, sharing_mode, sharing_enabled, sharing_expires_at, history_enabled, retention_days, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['locset_mem_dad', familyId, 'mem_dad', 'APP_ACTIVE', 1, null, 1, 7, now] },
+          { sql: `INSERT OR REPLACE INTO member_current_locations (id, family_id, family_member_id, latitude, longitude, accuracy, recorded_at, updated_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: ['curloc_mem_dad', familyId, 'mem_dad', 19.9072, 99.8325, 12, now, now, 'foreground'] },
         ];
 
         await tursoClient.batch(statements, 'write');
@@ -494,14 +494,14 @@ export async function getDb(): Promise<Database> {
 
 function initLocalSeedIfEmpty(db: Database) {
   try {
-    const checkStmt = db.prepare('SELECT count(*) as count FROM users');
-    let userCount = 0;
+    const checkStmt = db.prepare('SELECT count(*) as count FROM families');
+    let count = 0;
     if (checkStmt.step()) {
-      userCount = (checkStmt.getAsObject().count as number) || 0;
+      count = (checkStmt.getAsObject().count as number) || 0;
     }
     checkStmt.free();
 
-    if (userCount > 0) return;
+    if (count > 0) return;
 
     const defaultPasswordHash = '$2a$10$Nv16P04fzmOtS39pAreGk.eoDYfoVxTaBgEYDtG9ubFAMi682x61u';
     const now = new Date().toISOString();
