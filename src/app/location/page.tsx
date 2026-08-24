@@ -441,6 +441,7 @@ export default function LocationPage() {
           memberLocation={selectedMemberLoc}
           isCurrentUser={selectedMemberLoc?.family_member_id === member?.id}
           onRequestLocation={handleRequestMemberLocation}
+          onPlaceSaved={loadLocationData}
         />
 
         <SavedPlacesModal
