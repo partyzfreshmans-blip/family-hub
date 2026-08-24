@@ -13,6 +13,12 @@ import {
   Sparkles,
   KeyRound,
   ShieldAlert,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2,
+  Mail,
+  User,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -33,14 +39,29 @@ export default function FamilyPage() {
   const [copied, setCopied] = useState(false);
 
   // Modals
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
 
-  // Edit form state
-  const [newNickname, setNewNickname] = useState('');
-  const [newRole, setNewRole] = useState<Role>('ADULT');
-  const [newColor, setNewColor] = useState('#0284c7');
+  // Add Member form state
+  const [addNickname, setAddNickname] = useState('');
+  const [addDisplayName, setAddDisplayName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addPin, setAddPin] = useState('123456');
+  const [addRole, setAddRole] = useState<Role>('ADULT');
+  const [addColor, setAddColor] = useState('#0284c7');
+  const [showAddPin, setShowAddPin] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Edit Member form state
+  const [editNickname, setEditNickname] = useState('');
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPin, setEditPin] = useState('');
+  const [editRole, setEditRole] = useState<Role>('ADULT');
+  const [editColor, setEditColor] = useState('#0284c7');
+  const [showEditPin, setShowEditPin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,11 +115,63 @@ export default function FamilyPage() {
     }
   };
 
+  const openAddMemberModal = () => {
+    setAddNickname('');
+    setAddDisplayName('');
+    setAddEmail('');
+    setAddPin('123456');
+    setAddRole('ADULT');
+    setAddColor('#0284c7');
+    setShowAddPin(false);
+    setAddError(null);
+    setIsAddMemberModalOpen(true);
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addNickname.trim()) return;
+
+    setIsAddingMember(true);
+    setAddError(null);
+
+    try {
+      const res = await fetch('/api/families/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nickname: addNickname.trim(),
+          displayName: addDisplayName.trim() || addNickname.trim(),
+          email: addEmail.trim(),
+          pin: addPin.trim(),
+          role: addRole,
+          memberColor: addColor,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add member');
+      }
+
+      setIsAddMemberModalOpen(false);
+      fetchFamilyData();
+      refreshUser();
+    } catch (err: any) {
+      setAddError(err.message);
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
+
   const openEditModal = (m: FamilyMember) => {
     setEditingMember(m);
-    setNewNickname(m.nickname);
-    setNewRole(m.role);
-    setNewColor(m.member_color);
+    setEditNickname(m.nickname);
+    setEditDisplayName(m.display_name || m.nickname);
+    setEditEmail(m.email || '');
+    setEditPin('');
+    setEditRole(m.role);
+    setEditColor(m.member_color);
+    setShowEditPin(false);
     setError(null);
   };
 
@@ -114,9 +187,12 @@ export default function FamilyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           memberId: editingMember.id,
-          nickname: newNickname,
-          role: newRole,
-          memberColor: newColor,
+          nickname: editNickname.trim(),
+          displayName: editDisplayName.trim(),
+          email: editEmail.trim(),
+          pin: editPin.trim() || undefined,
+          role: editRole,
+          memberColor: editColor,
         }),
       });
 
@@ -161,11 +237,23 @@ export default function FamilyPage() {
           <p className="text-xs text-muted-foreground">สมาชิกทั้งหมดในบ้าน {family?.name}</p>
         </div>
 
-        {!isAdmin && (
-          <Badge variant="primary" size="md">
-            บทบาทของคุณ: {member?.role}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={openAddMemberModal}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>เพิ่มสมาชิกใหม่</span>
+            </button>
+          )}
+
+          {!isAdmin && (
+            <Badge variant="primary" size="md">
+              บทบาทของคุณ: {member?.role}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -222,10 +310,22 @@ export default function FamilyPage() {
 
           {/* Members List */}
           <div className="space-y-3">
-            <h2 className="font-bold text-base text-foreground px-1 flex items-center gap-2">
-              <Users className="w-4 h-4 text-primary" />
-              <span>{t.family.membersCount} ({members.length})</span>
-            </h2>
+            <div className="flex items-center justify-between px-1">
+              <h2 className="font-bold text-base text-foreground flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                <span>{t.family.membersCount} ({members.length})</span>
+              </h2>
+
+              {isAdmin && (
+                <button
+                  onClick={openAddMemberModal}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>เพิ่มสมาชิก</span>
+                </button>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {members.map((m) => {
@@ -240,8 +340,14 @@ export default function FamilyPage() {
                       <MemberAvatar name={m.nickname} color={m.member_color} size="lg" />
 
                       <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-base text-foreground truncate">{m.nickname}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3
+                            onClick={() => (isAdmin || isSelf) && openEditModal(m)}
+                            className={`font-bold text-base text-foreground truncate ${(isAdmin || isSelf) ? 'cursor-pointer hover:text-primary' : ''}`}
+                            title="คลิกเพื่อแก้ไขข้อมูลสมาชิก"
+                          >
+                            {m.nickname}
+                          </h3>
                           {isSelf && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
                               ฉัน
@@ -249,9 +355,12 @@ export default function FamilyPage() {
                           )}
                         </div>
 
-                        <p className="text-xs text-muted-foreground truncate">{m.display_name} ({m.email})</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {m.display_name && m.display_name !== m.nickname ? `${m.display_name} • ` : ''}
+                          {m.email}
+                        </p>
 
-                        <div className="flex items-center gap-2 pt-1">
+                        <div className="flex items-center gap-2 pt-1 flex-wrap">
                           <Badge
                             variant={
                               m.role === 'ADMIN' ? 'danger' : m.role === 'ADULT' ? 'primary' : 'success'
@@ -274,11 +383,11 @@ export default function FamilyPage() {
 
                     {/* Actions */}
                     {(isAdmin || isSelf) && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => openEditModal(m)}
-                          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          title={t.common.edit}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title="แก้ไขรายละเอียด / PIN เข้าใช้งาน"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -302,37 +411,230 @@ export default function FamilyPage() {
         </div>
       )}
 
+      {/* Add Member Modal (Admin Only) */}
+      {isAddMemberModalOpen && (
+        <Modal
+          isOpen={isAddMemberModalOpen}
+          onClose={() => setIsAddMemberModalOpen(false)}
+          title="เพิ่มสมาชิกใหม่ในบ้าน"
+          maxWidth="md"
+        >
+          <form onSubmit={handleAddMember} className="space-y-4">
+            {addError && (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-bold">
+                {addError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">ชื่อเรียกในบ้าน (Nickname) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น น้องวิน, คุณยาย, พี่บอส"
+                  value={addNickname}
+                  onChange={(e) => setAddNickname(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1">ชื่อ-นามสกุลจริง</label>
+                <input
+                  type="text"
+                  placeholder="เช่น วินัย สุขใจ"
+                  value={addDisplayName}
+                  onChange={(e) => setAddDisplayName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1">อีเมล / บัญชีสำหรับเข้าสู่ระบบ</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="เช่น win@familyhub.local หรืออีเมลจริง"
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                (หากเว้นว่าง ระบบจะสร้างอีเมลอัตโนมัติตามชื่อเรียก เช่น name@familyhub.local)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1">รหัสผ่าน หรือ PIN สำหรับเข้าใช้งาน *</label>
+              <div className="relative">
+                <input
+                  type={showAddPin ? 'text' : 'password'}
+                  required
+                  placeholder="เช่น 123456"
+                  value={addPin}
+                  onChange={(e) => setAddPin(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAddPin(!showAddPin)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showAddPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                กำหนดรหัส PIN หรือรหัสผ่านอย่างน้อย 4-6 ตัว เพื่อให้สมาชิกนำไปล็อกอินเข้าใช้งาน
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">บทบาท (Role) *</label>
+                <select
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value as Role)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="ADULT">{t.family.roles.ADULT} (ดูและแก้ไขได้ทั้งหมด)</option>
+                  <option value="CHILD">{t.family.roles.CHILD} (เด็ก - งานบ้าน/แต้ม)</option>
+                  <option value="ADMIN">{t.family.roles.ADMIN} (ผู้ดูแลระบบบ้าน)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5">สีประจำตัว</label>
+                <div className="flex items-center gap-2 pt-1">
+                  {colorOptions.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setAddColor(c)}
+                      style={{ backgroundColor: c }}
+                      className={`w-7 h-7 rounded-full transition-transform ${
+                        addColor === c ? 'ring-4 ring-primary/30 scale-110' : 'hover:scale-105'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsAddMemberModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={isAddingMember || !addNickname.trim()}
+                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+              >
+                {isAddingMember ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>กำลังเพิ่มสมาชิก...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>เพิ่มสมาชิก</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* Edit Member Modal */}
       {editingMember && (
         <Modal
           isOpen={!!editingMember}
           onClose={() => setEditingMember(null)}
-          title={`แก้ไขข้อมูล: ${editingMember.nickname}`}
+          title={`แก้ไขข้อมูลและ PIN: ${editingMember.nickname}`}
+          maxWidth="md"
         >
           <form onSubmit={handleSaveMember} className="space-y-4">
             {error && (
-              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs">
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-bold">
                 {error}
               </div>
             )}
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.family.nickname} *</label>
+                <input
+                  type="text"
+                  required
+                  value={editNickname}
+                  onChange={(e) => setEditNickname(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1">ชื่อ-นามสกุลจริง</label>
+                <input
+                  type="text"
+                  placeholder="ชื่อ-นามสกุล"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-bold mb-1">{t.family.nickname} *</label>
+              <label className="block text-xs font-bold mb-1">อีเมล / บัญชีสำหรับเข้าสู่ระบบ</label>
               <input
                 type="text"
-                required
-                value={newNickname}
-                onChange={(e) => setNewNickname(e.target.value)}
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+            </div>
+
+            {/* PIN / Password reset field */}
+            <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                <Lock className="w-4 h-4" />
+                <span>รีเซ็ตหรือเปลี่ยน PIN / รหัสผ่านเข้าสู่ระบบ</span>
+              </div>
+              <div className="relative">
+                <input
+                  type={showEditPin ? 'text' : 'password'}
+                  placeholder="พิมพ์ PIN หรือรหัสผ่านใหม่ (เว้นว่างหากไม่ต้องการเปลี่ยน)"
+                  value={editPin}
+                  onChange={(e) => setEditPin(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEditPin(!showEditPin)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showEditPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                แอดมินสามารถกำหนดรหัส PIN ใหม่ (เช่น 123456) ให้สมาชิกท่านนี้เพื่อใช้ล็อกอินได้ทันที
+              </p>
             </div>
 
             {isAdmin && (
               <div>
                 <label className="block text-xs font-bold mb-1">{t.family.changeRole}</label>
                 <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as Role)}
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as Role)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="ADMIN">{t.family.roles.ADMIN}</option>
@@ -340,7 +642,7 @@ export default function FamilyPage() {
                   <option value="CHILD">{t.family.roles.CHILD}</option>
                 </select>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {t.family.roleDescriptions[newRole]}
+                  {t.family.roleDescriptions[editRole]}
                 </p>
               </div>
             )}
@@ -352,10 +654,10 @@ export default function FamilyPage() {
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setNewColor(c)}
+                    onClick={() => setEditColor(c)}
                     style={{ backgroundColor: c }}
                     className={`w-8 h-8 rounded-full transition-transform ${
-                      newColor === c ? 'ring-4 ring-primary/30 scale-110' : 'hover:scale-105'
+                      editColor === c ? 'ring-4 ring-primary/30 scale-110' : 'hover:scale-105'
                     }`}
                   />
                 ))}
@@ -372,10 +674,17 @@ export default function FamilyPage() {
               </button>
               <button
                 type="submit"
-                disabled={isSaving}
-                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all"
+                disabled={isSaving || !editNickname.trim()}
+                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
               >
-                {isSaving ? t.common.saving : t.common.save}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{t.common.saving}</span>
+                  </>
+                ) : (
+                  <span>{t.common.save}</span>
+                )}
               </button>
             </div>
           </form>
