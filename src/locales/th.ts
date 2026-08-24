@@ -179,6 +179,7 @@ export const th = {
     pendingSection: 'ต้องซื้อ',
     purchasedSection: 'ซื้อแล้ว',
     restore: 'ย้ายกลับ',
+    duplicate: 'ทำซ้ำ',
     undo: 'เลิกทำ',
     categories: {
       Grocery: 'ของกิน / วัตถุดิบ',

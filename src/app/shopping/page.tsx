@@ -11,6 +11,7 @@ import {
   Sparkles,
   Loader2,
   Check,
+  Copy,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -27,6 +28,7 @@ export default function ShoppingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   // Fast Inline Add Form State
   const [itemName, setItemName] = useState('');
@@ -144,6 +146,31 @@ export default function ShoppingPage() {
       console.error(err);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleDuplicate = async (item: ShoppingItem) => {
+    if (duplicatingId) return;
+    setDuplicatingId(item.id);
+    try {
+      const res = await fetch('/api/shopping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit || '',
+          category: item.category,
+          note: item.note || '',
+        }),
+      });
+      if (res.ok) {
+        await fetchItems();
+      }
+    } catch (err) {
+      console.error('Duplicate shopping item error:', err);
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -365,8 +392,19 @@ export default function ShoppingPage() {
 
                       <div className="flex items-center gap-1">
                         <button
+                          onClick={() => handleDuplicate(item)}
+                          disabled={duplicatingId === item.id || isToggling}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-1.5 transition-all active:scale-95 border border-emerald-500/20"
+                          title={t.shopping.duplicate || 'ทำซ้ำ (ซื้ออีกครั้ง)'}
+                        >
+                          <Copy className={`w-3.5 h-3.5 ${duplicatingId === item.id ? 'animate-spin' : ''}`} />
+                          <span className="hidden sm:inline">
+                            {duplicatingId === item.id ? 'กำลังเพิ่ม...' : (t.shopping.duplicate || 'ทำซ้ำ')}
+                          </span>
+                        </button>
+                        <button
                           onClick={() => handleTogglePurchased(item)}
-                          disabled={isToggling}
+                          disabled={isToggling || duplicatingId === item.id}
                           className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-primary hover:bg-primary/10 flex items-center gap-1.5 transition-all active:scale-95"
                           title={t.shopping.restore}
                         >
@@ -377,7 +415,7 @@ export default function ShoppingPage() {
                         </button>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          disabled={isDeleting || isToggling}
+                          disabled={isDeleting || isToggling || duplicatingId === item.id}
                           className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />

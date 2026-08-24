@@ -181,6 +181,7 @@ export const en: typeof th = {
     pendingSection: 'To Buy',
     purchasedSection: 'Purchased',
     restore: 'Restore',
+    duplicate: 'Repeat',
     undo: 'Undo',
     categories: {
       Grocery: 'Grocery / Food',
