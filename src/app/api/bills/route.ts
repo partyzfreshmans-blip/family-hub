@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, amount, category, dueDate, recurrenceRule, notes } = body;
+    const { name, amount, category, dueDate, recurrenceRule, notes, attachmentUrl, attachmentName, attachmentType, imageUrl } = body;
 
     const numAmount = parseFloat(amount);
     if (!name || !name.trim() || !amount || isNaN(numAmount) || numAmount <= 0 || !dueDate) {
@@ -59,12 +59,15 @@ export async function POST(req: NextRequest) {
 
     const billId = generateId('bil');
     const now = new Date().toISOString();
+    const finalAttachmentUrl = attachmentUrl || body.attachment_url || imageUrl || body.image_url || null;
+    const finalAttachmentName = attachmentName || body.attachment_name || null;
+    const finalAttachmentType = attachmentType || body.attachment_type || null;
 
     await execute(
       `INSERT INTO bills (
         id, family_id, name, amount, category, due_date,
-        recurrence_rule, status, notes, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, ?, ?, ?)`,
+        recurrence_rule, status, notes, attachment_url, attachment_name, attachment_type, image_url, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'UNPAID', ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         billId,
         ctx.family.id,
@@ -74,6 +77,10 @@ export async function POST(req: NextRequest) {
         dueDate,
         recurrenceRule || 'MONTHLY',
         notes?.trim() || null,
+        finalAttachmentUrl,
+        finalAttachmentName,
+        finalAttachmentType,
+        finalAttachmentUrl,
         ctx.member.id,
         now,
         now,
@@ -137,7 +144,7 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { id, markPaid, paidBy, amount, paidDate, note, name, dueDate, recurrenceRule, status, notes } = body;
+    const { id, markPaid, paidBy, amount, paidDate, note, name, dueDate, recurrenceRule, status, notes, attachmentUrl, attachmentName, attachmentType, imageUrl } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Bill ID required' }, { status: 400 });
@@ -189,11 +196,15 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: true, paid: true });
     }
 
+    const finalAttachmentUrl = attachmentUrl !== undefined ? attachmentUrl : (body.attachment_url !== undefined ? body.attachment_url : (imageUrl !== undefined ? imageUrl : bill.attachment_url));
+    const finalAttachmentName = attachmentName !== undefined ? attachmentName : (body.attachment_name !== undefined ? body.attachment_name : bill.attachment_name);
+    const finalAttachmentType = attachmentType !== undefined ? attachmentType : (body.attachment_type !== undefined ? body.attachment_type : bill.attachment_type);
+
     // General update
     await execute(
       `UPDATE bills SET
         name = ?, amount = ?, category = ?, due_date = ?,
-        recurrence_rule = ?, status = ?, notes = ?, updated_at = ?
+        recurrence_rule = ?, status = ?, notes = ?, attachment_url = ?, attachment_name = ?, attachment_type = ?, image_url = ?, updated_at = ?
        WHERE id = ? AND family_id = ?`,
       [
         name !== undefined ? name.trim() : bill.name,
@@ -203,6 +214,10 @@ export async function PATCH(req: Request) {
         recurrenceRule || bill.recurrence_rule,
         status || bill.status,
         notes !== undefined ? (notes?.trim() || null) : bill.notes,
+        finalAttachmentUrl,
+        finalAttachmentName,
+        finalAttachmentType,
+        finalAttachmentUrl,
         now,
         id,
         ctx.family.id,

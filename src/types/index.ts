@@ -135,6 +135,10 @@ export interface Bill {
   recurrence_rule: 'NONE' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUALLY' | 'YEARLY';
   status: 'UNPAID' | 'PAID' | 'OVERDUE';
   notes?: string | null;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: string | null;
+  image_url?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
