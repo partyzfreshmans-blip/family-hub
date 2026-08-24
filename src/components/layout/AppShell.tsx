@@ -217,22 +217,36 @@ export function AppShell({ children }: AppShellProps) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-6">
         {/* Mobile Top Header */}
-        <header className="md:hidden sticky top-0 z-40 bg-card/85 backdrop-blur-md border-b border-border/80 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-primary to-sky-400 flex items-center justify-center text-white shadow-sm">
+        <header className="md:hidden sticky top-0 z-40 bg-card/85 backdrop-blur-md border-b border-border/80 px-4 py-2.5 flex items-center justify-between gap-2">
+          <Link href="/" className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-primary to-sky-400 flex items-center justify-center text-white shadow-sm shrink-0">
               <Home className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="font-extrabold text-sm leading-none">{family?.name || 'Family Hub'}</h2>
-              <p className="text-[10px] text-muted-foreground">{member?.nickname} ({member?.role})</p>
+            <div className="min-w-0">
+              <h2 className="font-extrabold text-sm leading-tight truncate">{family?.name || 'Family Hub'}</h2>
+              <p className="text-[10px] text-muted-foreground truncate">{member?.nickname} ({member?.role})</p>
             </div>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Location Button on Top Bar beside family */}
+            <Link
+              href="/location"
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                pathname === '/location'
+                  ? 'bg-primary text-primary-foreground ring-2 ring-primary/30'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20 dark:bg-primary/20'
+              }`}
+              title="ตำแหน่งครอบครัว"
+            >
+              <MapPin className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-[11px] font-extrabold">ตำแหน่ง</span>
+            </Link>
+
             {family?.rewards_enabled === 1 && (
               <Link
                 href="/rewards"
-                className="flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-1 rounded-xl"
+                className="flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-1.5 rounded-xl"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>{member?.points_balance || 0}</span>
@@ -241,7 +255,7 @@ export function AppShell({ children }: AppShellProps) {
 
             <Link
               href="/settings"
-              className="p-2 rounded-xl bg-muted/60 text-muted-foreground hover:text-foreground"
+              className="p-1.5 rounded-xl bg-muted/60 text-muted-foreground hover:text-foreground"
             >
               <Settings className="w-4 h-4" />
             </Link>
@@ -255,7 +269,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/90 backdrop-blur-lg border-t border-border/80 px-2 py-1.5 safe-bottom shadow-lg">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/90 backdrop-blur-lg border-t border-border/80 px-4 py-1.5 safe-bottom shadow-lg">
         <div className="flex items-center justify-around relative">
           {bottomNavItems.slice(0, 2).map((item) => {
             const Icon = item.icon;
@@ -264,8 +278,8 @@ export function AppShell({ children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-2xl transition-colors ${
-                  isActive ? 'text-primary font-bold' : 'text-muted-foreground'
+                className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-2xl transition-colors ${
+                  isActive ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Icon className="w-5 h-5" />
@@ -275,25 +289,25 @@ export function AppShell({ children }: AppShellProps) {
           })}
 
           {/* Central Prominent Quick Add Button */}
-          <div className="relative -top-5">
+          <div className="relative -top-4">
             <button
               onClick={() => setIsQuickAddOpen(true)}
-              className="w-13 h-13 w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-primary to-sky-400 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform ring-4 ring-card"
+              className="w-[50px] h-[50px] rounded-full bg-gradient-to-tr from-primary to-sky-400 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform ring-4 ring-card"
               title={t.nav.quickAdd}
             >
-              <Plus className="w-7 h-7" />
+              <Plus className="w-6 h-6" />
             </button>
           </div>
 
-          {bottomNavItems.slice(2, 5).map((item) => {
+          {bottomNavItems.slice(2, 4).map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-2xl transition-colors ${
-                  isActive ? 'text-primary font-bold' : 'text-muted-foreground'
+                className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-2xl transition-colors ${
+                  isActive ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Icon className="w-5 h-5" />
