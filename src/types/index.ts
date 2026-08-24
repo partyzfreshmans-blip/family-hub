@@ -117,6 +117,8 @@ export interface Expense {
   paid_by: string;
   expense_date: string; // YYYY-MM-DD
   note?: string | null;
+  location?: string | null;
+  image_url?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

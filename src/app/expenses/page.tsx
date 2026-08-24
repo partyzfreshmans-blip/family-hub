@@ -10,6 +10,18 @@ import {
   CreditCard,
   User,
   ArrowUpRight,
+  MapPin,
+  Navigation,
+  Image as ImageIcon,
+  Upload,
+  Download,
+  Maximize2,
+  Loader2,
+  Check,
+  Edit2,
+  ExternalLink,
+  Sparkles,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -19,9 +31,47 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
-import { Expense, FamilyMember } from '@/types';
+import { Expense, FamilyMember, FamilySavedPlace } from '@/types';
 import { StatementReaderModal } from '@/components/expenses/StatementReaderModal';
-import { Sparkles, FileSpreadsheet } from 'lucide-react';
+
+function compressImage(file: File, maxDimension = 1280, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function ExpensesPage() {
   const { t } = useLanguage();
@@ -30,12 +80,15 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [savedPlaces, setSavedPlaces] = useState<FamilySavedPlace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Form State
   const today = getTodayDateString();
@@ -45,6 +98,10 @@ export default function ExpensesPage() {
   const [paidBy, setPaidBy] = useState(member?.id || '');
   const [expenseDate, setExpenseDate] = useState(today);
   const [note, setNote] = useState('');
+  const [location, setLocation] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -62,6 +119,12 @@ export default function ExpensesPage() {
         const memJson = await memRes.json();
         setFamilyMembers(memJson.members || []);
       }
+
+      const placesRes = await fetch('/api/location/places');
+      if (placesRes.ok) {
+        const placesJson = await placesRes.json();
+        setSavedPlaces(placesJson.places || []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -74,14 +137,79 @@ export default function ExpensesPage() {
   }, [fetchExpenses]);
 
   const openAddModal = () => {
+    setEditingExpense(null);
     setAmount('');
     setDescription('');
     setCategory('Food');
     setPaidBy(member?.id || '');
     setExpenseDate(today);
     setNote('');
+    setLocation('');
+    setImageUrl(null);
     setFormError(null);
     setIsModalOpen(true);
+  };
+
+  const openEditModal = (exp: Expense) => {
+    setEditingExpense(exp);
+    setAmount(String(exp.amount || ''));
+    setDescription(exp.description || '');
+    setCategory(exp.category || 'Food');
+    setPaidBy(exp.paid_by || member?.id || '');
+    setExpenseDate(exp.expense_date || today);
+    setNote(exp.note || '');
+    setLocation(exp.location || '');
+    setImageUrl(exp.image_url || null);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const handleGetGpsLocation = () => {
+    if (!navigator.geolocation) {
+      alert('อุปกรณ์ไม่รองรับการระบุตำแหน่ง GPS');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        let matchedName = '';
+        for (const p of savedPlaces) {
+          const dLat = (p.latitude - lat) * 111000;
+          const dLng = (p.longitude - lng) * 111000 * Math.cos((lat * Math.PI) / 180);
+          const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+          if (dist <= (p.radius_meters || 150)) {
+            matchedName = p.name;
+            break;
+          }
+        }
+        setLocation(matchedName || `พิกัด GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+        setIsLocating(false);
+      },
+      (err) => {
+        console.error('GPS error:', err);
+        setIsLocating(false);
+        alert('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาอนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsCompressingImage(true);
+      const compressed = await compressImage(file, 1280, 0.82);
+      setImageUrl(compressed);
+    } catch (err) {
+      console.error('Image compression error:', err);
+      alert('ไม่สามารถประมวลผลรูปภาพได้');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -90,17 +218,22 @@ export default function ExpensesPage() {
     setFormError(null);
 
     try {
+      const payload = {
+        id: editingExpense?.id,
+        amount,
+        description,
+        category,
+        paidBy,
+        expenseDate,
+        note,
+        location,
+        imageUrl,
+      };
+
       const res = await fetch('/api/expenses', {
-        method: 'POST',
+        method: editingExpense ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount,
-          description,
-          category,
-          paidBy,
-          expenseDate,
-          note,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -262,19 +395,48 @@ export default function ExpensesPage() {
                   return (
                     <div
                       key={exp.id}
-                      className="p-4 rounded-3xl bg-card border border-border shadow-soft flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
+                      className="p-4 rounded-3xl bg-card border border-border shadow-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 hover:border-primary/40 transition-colors"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold flex-shrink-0">
-                          <DollarSign className="w-5 h-5" />
-                        </div>
+                      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                        {exp.image_url ? (
+                          <div
+                            onClick={() => setLightboxImage(exp.image_url)}
+                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-border shrink-0 cursor-pointer group relative shadow-xs"
+                            title="แตะเพื่อดูสลิป/รูปภาพเต็ม"
+                          >
+                            <img
+                              src={exp.image_url}
+                              alt={exp.description}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0">
+                            <DollarSign className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
+                        )}
 
-                        <div className="space-y-0.5 min-w-0">
-                          <p className="font-bold text-sm text-foreground truncate">{exp.description}</p>
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-sm text-foreground truncate">{exp.description}</p>
                             <Badge variant="purple" size="sm">
                               {t.expenses.categories[exp.category as keyof typeof t.expenses.categories] || exp.category}
                             </Badge>
+                            {exp.image_url && (
+                              <span
+                                onClick={() => setLightboxImage(exp.image_url)}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center gap-1 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                                title="คลิกเพื่อดูสลิป/รูปภาพ"
+                              >
+                                <ImageIcon className="w-3 h-3" /> มีสลิป/รูปแนบ
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-0.5">
                             {payer && (
                               <div className="flex items-center gap-1 font-semibold text-foreground/80">
                                 <MemberAvatar name={payer.nickname} color={payer.member_color} size="sm" className="w-4 h-4 text-[9px]" />
@@ -282,18 +444,55 @@ export default function ExpensesPage() {
                               </div>
                             )}
                             <span>• {formatThaiDate(exp.expense_date, { shortMonth: true })}</span>
+
+                            {exp.location && (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(exp.location)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1 hover:text-blue-500 hover:underline transition-colors font-medium"
+                                title="เปิดใน Google Maps"
+                              >
+                                <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                                <span className="max-w-[130px] truncate">{exp.location}</span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              </a>
+                            )}
                           </div>
+
+                          {exp.note && (
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 italic">
+                              หมายเหตุ: {exp.note}
+                            </p>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="font-extrabold text-base text-foreground">
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <span className="font-extrabold text-base text-foreground pr-1">
                           -{formatCurrency(exp.amount)}
                         </span>
 
+                        {exp.image_url && (
+                          <button
+                            onClick={() => setLightboxImage(exp.image_url)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-purple-600 hover:bg-purple-500/10 transition-colors"
+                            title="ดูสลิป/รูปภาพ"
+                          >
+                            <ImageIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openEditModal(exp)}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          title={t.common.edit}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => setDeletingId(exp.id)}
                           className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                          title={t.common.delete}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -307,11 +506,12 @@ export default function ExpensesPage() {
         </>
       )}
 
-      {/* Add Expense Modal */}
+      {/* Add / Edit Expense Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={t.expenses.addExpense}
+        title={editingExpense ? 'แก้ไขรายจ่าย' : t.expenses.addExpense}
+        maxWidth="lg"
       >
         <form onSubmit={handleSave} className="space-y-4">
           {formError && (
@@ -387,6 +587,133 @@ export default function ExpensesPage() {
             />
           </div>
 
+          {/* Enhanced Location Section */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold">สถานที่ / ร้านค้าที่ใช้จ่าย</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGetGpsLocation}
+                  disabled={isLocating}
+                  className="text-[11px] font-bold text-primary hover:text-primary-600 flex items-center gap-1 transition-colors"
+                >
+                  {isLocating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
+                  <span>{isLocating ? 'กำลังค้นหา...' : 'ปักหมุด GPS ปัจจุบัน'}</span>
+                </button>
+                {location && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-bold text-muted-foreground hover:text-blue-500 flex items-center gap-0.5"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>ดูบนแผนที่</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                placeholder="เช่น Lotus สาขาใหญ่, ร้านอาหารบ้านสวน, ปั๊ม PTT"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* Quick select from saved family places */}
+            {savedPlaces.length > 0 && (
+              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-muted-foreground font-semibold">สถานที่ของบ้าน:</span>
+                {savedPlaces.slice(0, 6).map((place) => (
+                  <button
+                    key={place.id}
+                    type="button"
+                    onClick={() => setLocation(place.name)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                      location === place.name
+                        ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                        : 'border-border/60 bg-muted/40 text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {place.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Receipt / Image Upload Section */}
+          <div>
+            <label className="block text-xs font-bold mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-primary" />
+                <span>สลิปโอนเงิน / ใบเสร็จรับเงิน / รูปสินค้า</span>
+              </span>
+              {imageUrl && (
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> แนบสลิป/รูปแล้ว
+                </span>
+              )}
+            </label>
+
+            {imageUrl ? (
+              <div className="relative group rounded-2xl overflow-hidden border border-border bg-muted/30 p-2.5 flex items-center gap-3">
+                <img
+                  src={imageUrl}
+                  alt="Expense attachment"
+                  className="w-20 h-20 object-cover rounded-xl border border-border/80 shadow-xs cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+                  onClick={() => setLightboxImage(imageUrl)}
+                  title="แตะเพื่อขยายดูรูปขนาดเต็ม"
+                />
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <p className="text-xs font-bold text-foreground truncate">สลิป/ใบเสร็จสำหรับรายจ่ายนี้</p>
+                  <p className="text-[11px] text-muted-foreground">แตะที่รูปเพื่อขยายดูขนาดเต็ม</p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <label className="cursor-pointer px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-bold text-foreground flex items-center gap-1 transition-colors">
+                      <Upload className="w-3 h-3" />
+                      <span>เปลี่ยนรูป</span>
+                      <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl(null)}
+                      className="px-2.5 py-1 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>ลบรูป</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border hover:border-primary/60 rounded-2xl cursor-pointer bg-muted/20 hover:bg-muted/40 transition-all text-center group">
+                {isCompressingImage ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>กำลังประมวลผลและบีบอัดรูปภาพ...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-1 group-hover:scale-105 transition-transform">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-foreground">แตะเพื่อแนบสลิป ใบเสร็จ หรือถ่ายรูปใหม่</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">JPG, PNG, WEBP (บีบอัดและปรับขนาดให้อัตโนมัติ)</span>
+                    <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                  </>
+                )}
+              </label>
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-bold mb-1">{t.expenses.note}</label>
             <textarea
@@ -416,6 +743,43 @@ export default function ExpensesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Lightbox Modal for Full Image View */}
+      {lightboxImage && (
+        <Modal
+          isOpen={!!lightboxImage}
+          onClose={() => setLightboxImage(null)}
+          title="สลิป / ใบเสร็จรับเงิน"
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div className="max-h-[70vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/5 dark:bg-black/40 p-2">
+              <img
+                src={lightboxImage}
+                alt="Expense Full View"
+                className="max-h-[65vh] w-auto object-contain rounded-xl shadow-md"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <a
+                href={lightboxImage}
+                download="expense-receipt.jpg"
+                className="px-3.5 py-2 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold flex items-center gap-1.5 text-foreground transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>ดาวน์โหลดรูปภาพ</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-600 active:scale-95 transition-all"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Delete Confirmation */}
       <ConfirmDialog

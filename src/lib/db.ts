@@ -174,6 +174,8 @@ const DB_SCHEMA = `
     paid_by TEXT NOT NULL,
     expense_date TEXT NOT NULL,
     note TEXT,
+    location TEXT,
+    image_url TEXT,
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -404,6 +406,12 @@ async function ensureTursoInitialized() {
       } catch (e) {
         // columns might already exist
       }
+      try {
+        await tursoClient.execute('ALTER TABLE expenses ADD COLUMN location TEXT');
+        await tursoClient.execute('ALTER TABLE expenses ADD COLUMN image_url TEXT');
+      } catch (e) {
+        // columns might already exist
+      }
       
       const checkRes = await tursoClient.execute('SELECT count(*) as count FROM families');
       const count = (checkRes.rows[0]?.count as number) || 0;
@@ -503,6 +511,12 @@ export async function getDb(): Promise<Database> {
         dbInstance.run('ALTER TABLE tasks ADD COLUMN attachment_url TEXT;');
         dbInstance.run('ALTER TABLE tasks ADD COLUMN attachment_name TEXT;');
         dbInstance.run('ALTER TABLE tasks ADD COLUMN attachment_type TEXT;');
+      } catch (e) {
+        // columns might already exist
+      }
+      try {
+        dbInstance.run('ALTER TABLE expenses ADD COLUMN location TEXT;');
+        dbInstance.run('ALTER TABLE expenses ADD COLUMN image_url TEXT;');
       } catch (e) {
         // columns might already exist
       }

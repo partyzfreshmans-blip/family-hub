@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { amount, category, description, paidBy, expenseDate, note } = body;
+    const { amount, category, description, paidBy, expenseDate, note, location, imageUrl } = body;
 
     const numAmount = parseFloat(amount);
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
     await execute(
       `INSERT INTO expenses (
         id, family_id, amount, category, description, paid_by,
-        expense_date, note, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        expense_date, note, location, image_url, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         expenseId,
         ctx.family.id,
@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
         paidBy || ctx.member.id,
         expenseDate,
         note?.trim() || null,
+        location?.trim() || null,
+        imageUrl || body.image_url || null,
         ctx.member.id,
         now,
         now,
@@ -118,6 +120,64 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Add expense error:', error);
     return NextResponse.json({ error: 'Failed to save expense' }, { status: 500 });
+  }
+}
+
+// PUT: Edit expense
+export async function PUT(req: NextRequest) {
+  try {
+    const ctx = await getCurrentUserContext();
+    if (!ctx) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (ctx.member.role === 'CHILD') {
+      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { id, amount, category, description, paidBy, expenseDate, note, location, imageUrl } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Expense ID required' }, { status: 400 });
+    }
+
+    const expense = await queryOne<Expense>('SELECT * FROM expenses WHERE id = ? AND family_id = ?', [id, ctx.family.id]);
+    if (!expense) {
+      return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
+    }
+
+    const numAmount = parseFloat(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
+      return NextResponse.json({ error: 'จำนวนเงินต้องมากกว่า 0 บาท' }, { status: 400 });
+    }
+
+    const now = new Date().toISOString();
+
+    await execute(
+      `UPDATE expenses SET
+        amount = ?, category = ?, description = ?, paid_by = ?,
+        expense_date = ?, note = ?, location = ?, image_url = ?, updated_at = ?
+       WHERE id = ? AND family_id = ?`,
+      [
+        numAmount,
+        category || expense.category,
+        description !== undefined ? description.trim() : expense.description,
+        paidBy || expense.paid_by,
+        expenseDate || expense.expense_date,
+        note !== undefined ? (note?.trim() || null) : expense.note,
+        location !== undefined ? (location?.trim() || null) : expense.location,
+        imageUrl !== undefined ? imageUrl : (body.image_url !== undefined ? body.image_url : expense.image_url),
+        now,
+        id,
+        ctx.family.id,
+      ]
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Update expense error:', error);
+    return NextResponse.json({ error: 'Failed to update expense' }, { status: 500 });
   }
 }
 
