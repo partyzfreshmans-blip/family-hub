@@ -169,6 +169,7 @@ export const th = {
   shopping: {
     title: 'รายการซื้อของ',
     addItem: 'เพิ่มรายการ',
+    editItem: 'แก้ไขรายการ',
     itemName: 'ชื่อของที่ต้องซื้อ',
     quickAddPlaceholder: 'เพิ่มของที่ต้องซื้อ เช่น นมสด, ไข่ไก่...',
     quantity: 'จำนวน',

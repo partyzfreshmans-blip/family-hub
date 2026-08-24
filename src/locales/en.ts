@@ -171,6 +171,7 @@ export const en: typeof th = {
   shopping: {
     title: 'Shopping List',
     addItem: 'Add Item',
+    editItem: 'Edit Item',
     itemName: 'Item Name',
     quickAddPlaceholder: 'Add item e.g. Milk, Eggs...',
     quantity: 'Quantity',

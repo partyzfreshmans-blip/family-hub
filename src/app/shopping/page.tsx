@@ -12,10 +12,12 @@ import {
   Loader2,
   Check,
   Copy,
+  Edit2,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { ShoppingItem } from '@/types';
 
@@ -29,6 +31,16 @@ export default function ShoppingPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+
+  // Edit Modal State
+  const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editQuantity, setEditQuantity] = useState('1');
+  const [editUnit, setEditUnit] = useState('');
+  const [editCategory, setEditCategory] = useState<any>('Grocery');
+  const [editNote, setEditNote] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Fast Inline Add Form State
   const [itemName, setItemName] = useState('');
@@ -174,6 +186,50 @@ export default function ShoppingPage() {
     }
   };
 
+  const openEditModal = (item: ShoppingItem) => {
+    setEditingItem(item);
+    setEditName(item.name);
+    setEditQuantity(String(item.quantity || 1));
+    setEditUnit(item.unit || '');
+    setEditCategory(item.category || 'Grocery');
+    setEditNote(item.note || '');
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem || !editName.trim()) return;
+
+    setIsSavingEdit(true);
+    setEditError(null);
+    try {
+      const res = await fetch('/api/shopping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingItem.id,
+          name: editName.trim(),
+          quantity: editQuantity ? parseFloat(editQuantity) : 1,
+          unit: editUnit.trim() || null,
+          category: editCategory,
+          note: editNote.trim() || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update item');
+      }
+
+      setEditingItem(null);
+      await fetchItems();
+    } catch (err: any) {
+      setEditError(err.message || 'เกิดข้อผิดพลาดในการแก้ไข');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const pendingItems = items.filter((i) => i.purchased === 0);
   const purchasedItems = items.filter((i) => i.purchased === 1);
 
@@ -299,7 +355,7 @@ export default function ShoppingPage() {
                           : 'hover:border-primary/40 animate-slide-up'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <button
                           onClick={() => handleTogglePurchased(item)}
                           disabled={isToggling}
@@ -313,12 +369,14 @@ export default function ShoppingPage() {
                           )}
                         </button>
 
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p
-                              className={`font-bold text-sm text-foreground truncate transition-all duration-200 ${
+                              onClick={() => openEditModal(item)}
+                              className={`font-bold text-sm text-foreground truncate cursor-pointer hover:text-primary transition-colors ${
                                 isToggling ? 'line-through text-muted-foreground' : ''
                               }`}
+                              title="คลิกเพื่อแก้ไขรายละเอียด"
                             >
                               {item.name}
                             </p>
@@ -327,22 +385,38 @@ export default function ShoppingPage() {
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
                             <Badge variant="primary" size="sm">
                               {t.shopping.categories[item.category as keyof typeof t.shopping.categories] || item.category}
                             </Badge>
                             {item.adder_nick && <span>เพิ่มโดย {item.adder_nick}</span>}
+                            {item.note && (
+                              <span className="text-[11px] text-muted-foreground italic truncate max-w-[200px]">
+                                • {item.note}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        disabled={isDeleting || isToggling}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          disabled={isDeleting || isToggling}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title={t.shopping.editItem || 'แก้ไขรายละเอียด'}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={isDeleting || isToggling}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                          title={t.common.delete}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -378,19 +452,24 @@ export default function ShoppingPage() {
                           : 'opacity-60 hover:opacity-100 animate-slide-up'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm line-through text-muted-foreground truncate">
                             {item.name} ({item.quantity} {item.unit || 'ชิ้น'})
                           </p>
-                          {item.buyer_nick && (
-                            <p className="text-[10px] text-muted-foreground">ซื้อแล้วโดย {item.buyer_nick}</p>
-                          )}
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
+                            {item.buyer_nick && (
+                              <span>ซื้อแล้วโดย {item.buyer_nick}</span>
+                            )}
+                            {item.note && (
+                              <span className="italic truncate max-w-[180px]">• {item.note}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => handleDuplicate(item)}
                           disabled={duplicatingId === item.id || isToggling}
@@ -414,9 +493,18 @@ export default function ShoppingPage() {
                           </span>
                         </button>
                         <button
+                          onClick={() => openEditModal(item)}
+                          disabled={isDeleting || isToggling || duplicatingId === item.id}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title={t.shopping.editItem || 'แก้ไขรายละเอียด'}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleDelete(item.id)}
                           disabled={isDeleting || isToggling || duplicatingId === item.id}
                           className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                          title={t.common.delete}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -428,6 +516,112 @@ export default function ShoppingPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Edit Shopping Item Modal */}
+      {editingItem && (
+        <Modal
+          isOpen={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          title={t.shopping.editItem || 'แก้ไขรายละเอียดสินค้า'}
+          maxWidth="md"
+        >
+          <form onSubmit={handleSaveEdit} className="space-y-4">
+            {editError && (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-bold">
+                {editError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold mb-1">{t.shopping.itemName} *</label>
+              <input
+                type="text"
+                required
+                placeholder="เช่น นมสด, ไข่ไก่, น้ำยาล้างจาน"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.shopping.quantity}</label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0.1"
+                  required
+                  placeholder="เช่น 1, 2, 0.5"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.shopping.unit}</label>
+                <input
+                  type="text"
+                  placeholder="เช่น กล่อง, ขวด, ถุง, แพ็ค"
+                  value={editUnit}
+                  onChange={(e) => setEditUnit(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1">{t.shopping.category}</label>
+              <select
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(Object.entries(t.shopping.categories) as [string, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1">{t.shopping.note}</label>
+              <textarea
+                rows={2}
+                placeholder="บันทึกเพิ่มเติม เช่น ยี่ห้อ, ขนาด, รสชาติที่ต้องการ..."
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEdit || !editName.trim()}
+                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+              >
+                {isSavingEdit ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{t.common.saving}</span>
+                  </>
+                ) : (
+                  <span>{t.common.save}</span>
+                )}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );
