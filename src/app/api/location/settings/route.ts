@@ -90,6 +90,14 @@ export async function PUT(request: NextRequest) {
 
     const nowIso = now.toISOString();
 
+    const historyVal = Boolean(
+      history_enabled === 1 ||
+      history_enabled === true ||
+      history_enabled === '1'
+    ) ? 1 : 0;
+    const sharingVal = sharing_mode !== 'OFF' ? (sharing_enabled ? 1 : 0) : 0;
+    const retentionVal = Number(retention_days) || 7;
+
     if (existing) {
       await execute(
         `UPDATE member_location_settings
@@ -97,10 +105,10 @@ export async function PUT(request: NextRequest) {
          WHERE id = ?`,
         [
           sharing_mode,
-          sharing_enabled ? 1 : 0,
+          sharingVal,
           expiresAt,
-          history_enabled ? 1 : 0,
-          Number(retention_days) || 7,
+          historyVal,
+          retentionVal,
           nowIso,
           existing.id,
         ]
@@ -115,10 +123,10 @@ export async function PUT(request: NextRequest) {
           familyId,
           memberId,
           sharing_mode,
-          sharing_enabled ? 1 : 0,
+          sharingVal,
           expiresAt,
-          history_enabled ? 1 : 0,
-          Number(retention_days) || 7,
+          historyVal,
+          retentionVal,
           nowIso,
         ]
       );
@@ -127,10 +135,10 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({
       success: true,
       sharing_mode,
-      sharing_enabled: sharing_enabled ? 1 : 0,
+      sharing_enabled: sharingVal,
       sharing_expires_at: expiresAt,
-      history_enabled: history_enabled ? 1 : 0,
-      retention_days: Number(retention_days) || 7,
+      history_enabled: historyVal,
+      retention_days: retentionVal,
     });
   } catch (error: any) {
     console.error('Error updating location settings:', error);

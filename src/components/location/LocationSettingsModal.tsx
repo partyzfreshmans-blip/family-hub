@@ -1,10 +1,8 @@
-'use client';
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { MemberLocationSettings } from '@/types';
 import { useLanguage } from '@/components/LanguageContext';
-import { Shield, Clock, Trash2, CheckCircle2, History, AlertTriangle } from 'lucide-react';
+import { Shield, Clock, Trash2, CheckCircle2, History, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface LocationSettingsModalProps {
   isOpen: boolean;
@@ -20,16 +18,31 @@ export default function LocationSettingsModal({
   onSettingsUpdated,
 }: LocationSettingsModalProps) {
   const { t } = useLanguage();
-  const [sharingMode, setSharingMode] = useState<string>(settings?.sharing_mode || 'APP_ACTIVE');
+  const [sharingMode, setSharingMode] = useState<string>('APP_ACTIVE');
   const [durationHours, setDurationHours] = useState<string>('4');
-  const [historyEnabled, setHistoryEnabled] = useState<boolean>(settings?.history_enabled === 1);
-  const [retentionDays, setRetentionDays] = useState<number>(settings?.retention_days || 7);
+  const [historyEnabled, setHistoryEnabled] = useState<boolean>(false);
+  const [retentionDays, setRetentionDays] = useState<number>(7);
   const [saving, setSaving] = useState(false);
   const [purging, setPurging] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Sync settings whenever modal opens or settings prop changes
+  useEffect(() => {
+    if (isOpen && settings) {
+      setSharingMode(settings.sharing_mode || 'APP_ACTIVE');
+      const isHistOn = Boolean(
+        settings.history_enabled === 1 ||
+        (settings.history_enabled as any) === true ||
+        (settings.history_enabled as any) === '1'
+      );
+      setHistoryEnabled(isHistOn);
+      setRetentionDays(settings.retention_days || 7);
+      setMsg(null);
+    }
+  }, [isOpen, settings]);
+
+  const handleSaveSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSaving(true);
     try {
       const res = await fetch('/api/location/settings', {
@@ -46,12 +59,36 @@ export default function LocationSettingsModal({
       if (res.ok) {
         setMsg('บันทึกการตั้งค่าเรียบร้อยแล้ว');
         onSettingsUpdated();
-        setTimeout(() => setMsg(null), 2500);
+        setTimeout(() => {
+          setMsg(null);
+          onClose();
+        }, 800);
       }
     } catch (err) {
       console.error('Error updating location settings:', err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Immediate toggle for history switch with instant server save
+  const handleToggleHistory = async (newVal: boolean) => {
+    setHistoryEnabled(newVal);
+    try {
+      await fetch('/api/location/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sharing_mode: sharingMode,
+          sharing_enabled: sharingMode !== 'OFF' ? 1 : 0,
+          duration_hours: sharingMode === 'TIMED' ? durationHours : null,
+          history_enabled: newVal ? 1 : 0,
+          retention_days: retentionDays,
+        }),
+      });
+      onSettingsUpdated();
+    } catch (err) {
+      console.error('Error auto-saving history toggle:', err);
     }
   };
 
@@ -149,7 +186,7 @@ export default function LocationSettingsModal({
               <input
                 type="checkbox"
                 checked={historyEnabled}
-                onChange={(e) => setHistoryEnabled(e.target.checked)}
+                onChange={(e) => handleToggleHistory(e.target.checked)}
                 className="sr-only peer"
               />
               <div className="w-10 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
