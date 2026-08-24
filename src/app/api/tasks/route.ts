@@ -71,6 +71,9 @@ export async function POST(req: NextRequest) {
       status,
       recurrenceRule,
       points,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
     } = body;
 
     if (!title || !title.trim()) {
@@ -83,8 +86,9 @@ export async function POST(req: NextRequest) {
     await execute(
       `INSERT INTO tasks (
         id, family_id, title, description, assigned_to, due_date, due_time,
-        priority, status, recurrence_rule, points, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        priority, status, recurrence_rule, points, attachment_url, attachment_name, attachment_type,
+        created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         taskId,
         ctx.family.id,
@@ -97,6 +101,9 @@ export async function POST(req: NextRequest) {
         status || 'TODO',
         recurrenceRule || 'NONE',
         points ? parseInt(points, 10) : 0,
+        attachmentUrl || body.attachment_url || null,
+        attachmentName || body.attachment_name || null,
+        attachmentType || body.attachment_type || null,
         ctx.member.id,
         now,
         now,
@@ -119,7 +126,21 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { id, status, title, description, assignedTo, dueDate, dueTime, priority, recurrenceRule, points } = body;
+    const {
+      id,
+      status,
+      title,
+      description,
+      assignedTo,
+      dueDate,
+      dueTime,
+      priority,
+      recurrenceRule,
+      points,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Task ID required' }, { status: 400 });
@@ -150,6 +171,7 @@ export async function PATCH(req: NextRequest) {
         `UPDATE tasks SET 
           title = ?, description = ?, assigned_to = ?, due_date = ?, due_time = ?,
           priority = ?, status = ?, recurrence_rule = ?, points = ?,
+          attachment_url = ?, attachment_name = ?, attachment_type = ?,
           completed_by = ?, completed_at = ?, updated_at = ?
          WHERE id = ? AND family_id = ?`,
         [
@@ -162,6 +184,9 @@ export async function PATCH(req: NextRequest) {
           newStatus,
           recurrenceRule || task.recurrence_rule,
           points !== undefined ? parseInt(points, 10) : task.points,
+          attachmentUrl !== undefined ? attachmentUrl : (body.attachment_url !== undefined ? body.attachment_url : task.attachment_url),
+          attachmentName !== undefined ? attachmentName : (body.attachment_name !== undefined ? body.attachment_name : task.attachment_name),
+          attachmentType !== undefined ? attachmentType : (body.attachment_type !== undefined ? body.attachment_type : task.attachment_type),
           completedBy,
           completedAt,
           now,

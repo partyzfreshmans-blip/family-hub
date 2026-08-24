@@ -79,6 +79,9 @@ export interface Task {
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
   recurrence_rule: 'NONE' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
   points: number;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: string | null;
   created_by: string;
   completed_by?: string | null;
   completed_at?: string | null;

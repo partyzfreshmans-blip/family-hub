@@ -133,6 +133,9 @@ const DB_SCHEMA = `
     status TEXT NOT NULL DEFAULT 'TODO' CHECK(status IN ('TODO', 'IN_PROGRESS', 'COMPLETED')),
     recurrence_rule TEXT DEFAULT 'NONE',
     points INTEGER DEFAULT 0,
+    attachment_url TEXT,
+    attachment_name TEXT,
+    attachment_type TEXT,
     created_by TEXT NOT NULL,
     completed_by TEXT,
     completed_at TEXT,
@@ -394,6 +397,13 @@ async function ensureTursoInitialized() {
       } catch (e) {
         // column might already exist
       }
+      try {
+        await tursoClient.execute('ALTER TABLE tasks ADD COLUMN attachment_url TEXT');
+        await tursoClient.execute('ALTER TABLE tasks ADD COLUMN attachment_name TEXT');
+        await tursoClient.execute('ALTER TABLE tasks ADD COLUMN attachment_type TEXT');
+      } catch (e) {
+        // columns might already exist
+      }
       
       const checkRes = await tursoClient.execute('SELECT count(*) as count FROM families');
       const count = (checkRes.rows[0]?.count as number) || 0;
@@ -488,6 +498,13 @@ export async function getDb(): Promise<Database> {
         dbInstance.run('ALTER TABLE events ADD COLUMN image_url TEXT;');
       } catch (e) {
         // column might already exist
+      }
+      try {
+        dbInstance.run('ALTER TABLE tasks ADD COLUMN attachment_url TEXT;');
+        dbInstance.run('ALTER TABLE tasks ADD COLUMN attachment_name TEXT;');
+        dbInstance.run('ALTER TABLE tasks ADD COLUMN attachment_type TEXT;');
+      } catch (e) {
+        // columns might already exist
       }
       initLocalSeedIfEmpty(dbInstance);
       saveDatabase();
