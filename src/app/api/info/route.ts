@@ -51,6 +51,45 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const ctx = await getCurrentUserContext();
+    if (!ctx) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, category, title, value, contactPhone, notes } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID required' }, { status: 400 });
+    }
+
+    if (!title || !title.trim() || !value || !value.trim()) {
+      return NextResponse.json({ error: 'กรุณากรอกหัวข้อและข้อมูล' }, { status: 400 });
+    }
+
+    await execute(
+      `UPDATE household_info SET
+        category = ?, title = ?, value = ?, contact_phone = ?, notes = ?
+       WHERE id = ? AND family_id = ?`,
+      [
+        category || 'GENERAL',
+        title.trim(),
+        value.trim(),
+        contactPhone !== undefined ? (contactPhone?.trim() || null) : null,
+        notes !== undefined ? (notes?.trim() || null) : null,
+        id,
+        ctx.family.id,
+      ]
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to update household info' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const ctx = await getCurrentUserContext();

@@ -12,6 +12,8 @@ import {
   HeartHandshake,
   FileText,
   Dog,
+  Edit2,
+  Loader2,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -30,6 +32,7 @@ export default function HouseholdInfoPage() {
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<HouseholdInfo | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form State
@@ -59,22 +62,47 @@ export default function HouseholdInfoPage() {
     fetchInfo();
   }, [fetchInfo]);
 
+  const openAddModal = () => {
+    setEditingItem(null);
+    setTitle('');
+    setValue('');
+    setCategory('GENERAL');
+    setContactPhone('');
+    setNotes('');
+    setFormError(null);
+    setIsAddModalOpen(true);
+  };
+
+  const openEditModal = (item: HouseholdInfo) => {
+    setEditingItem(item);
+    setTitle(item.title);
+    setValue(item.value);
+    setCategory(item.category || 'GENERAL');
+    setContactPhone(item.contact_phone || '');
+    setNotes(item.notes || '');
+    setFormError(null);
+    setIsAddModalOpen(true);
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setFormError(null);
 
     try {
+      const payload = {
+        id: editingItem?.id,
+        title,
+        value,
+        category,
+        contactPhone,
+        notes,
+      };
+
       const res = await fetch('/api/info', {
-        method: 'POST',
+        method: editingItem ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          value,
-          category,
-          contactPhone,
-          notes,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -129,15 +157,7 @@ export default function HouseholdInfoPage() {
         </div>
 
         <button
-          onClick={() => {
-            setTitle('');
-            setValue('');
-            setCategory('GENERAL');
-            setContactPhone('');
-            setNotes('');
-            setFormError(null);
-            setIsAddModalOpen(true);
-          }}
+          onClick={openAddModal}
           className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -160,7 +180,7 @@ export default function HouseholdInfoPage() {
           title="ยังไม่มีข้อมูลบ้านที่บันทึกไว้"
           description="บันทึกเบอร์ฉุกเฉิน ช่างแอร์ ช่างไฟ หรือรหัส Wi-Fi เพื่อให้คนในบ้านดูได้สะดวก"
           actionText={t.householdInfo.addInfo}
-          onAction={() => setIsAddModalOpen(true)}
+          onAction={openAddModal}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -178,7 +198,13 @@ export default function HouseholdInfoPage() {
                       <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
                         <Icon className="w-4 h-4" />
                       </div>
-                      <h3 className="font-bold text-sm text-foreground truncate">{item.title}</h3>
+                      <h3
+                        onClick={() => openEditModal(item)}
+                        className="font-bold text-sm text-foreground truncate cursor-pointer hover:text-primary transition-colors"
+                        title="คลิกเพื่อแก้ไขข้อมูล"
+                      >
+                        {item.title}
+                      </h3>
                     </div>
 
                     <Badge variant="primary" size="sm">
@@ -203,10 +229,18 @@ export default function HouseholdInfoPage() {
                   {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
                 </div>
 
-                <div className="flex justify-end pt-2 border-t border-border/40">
+                <div className="flex items-center justify-end gap-1 pt-2 border-t border-border/40">
+                  <button
+                    onClick={() => openEditModal(item)}
+                    className="p-1.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                    title="แก้ไขข้อมูล"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => setDeletingId(item.id)}
                     className="p-1.5 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                    title="ลบข้อมูล"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -217,11 +251,11 @@ export default function HouseholdInfoPage() {
         </div>
       )}
 
-      {/* Add Info Modal */}
+      {/* Add / Edit Info Modal */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title={t.householdInfo.addInfo}
+        title={editingItem ? 'แก้ไขข้อมูลสำคัญของบ้าน' : t.householdInfo.addInfo}
       >
         <form onSubmit={handleSave} className="space-y-4">
           {formError && (
@@ -303,9 +337,16 @@ export default function HouseholdInfoPage() {
             <button
               type="submit"
               disabled={isSaving}
-              className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all"
+              className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
             >
-              {isSaving ? t.common.saving : t.common.save}
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{t.common.saving}</span>
+                </>
+              ) : (
+                <span>{t.common.save}</span>
+              )}
             </button>
           </div>
         </form>
