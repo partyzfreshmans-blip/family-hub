@@ -48,7 +48,17 @@ const THAI_DAYS = [
 
 export function formatThaiDate(dateStringOrDate: string | Date, options?: { showDayOfWeek?: boolean; shortMonth?: boolean; showYear?: boolean }): string {
   if (!dateStringOrDate) return '';
-  const date = typeof dateStringOrDate === 'string' ? new Date(dateStringOrDate) : dateStringOrDate;
+  let date: Date;
+  if (typeof dateStringOrDate === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStringOrDate)) {
+      const [y, m, d] = dateStringOrDate.split('-').map(Number);
+      date = new Date(y, m - 1, d);
+    } else {
+      date = new Date(dateStringOrDate);
+    }
+  } else {
+    date = dateStringOrDate;
+  }
   if (isNaN(date.getTime())) return '';
 
   const dayOfWeek = THAI_DAYS[date.getDay()];

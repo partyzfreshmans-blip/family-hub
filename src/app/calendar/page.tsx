@@ -235,21 +235,33 @@ export default function CalendarPage() {
   const dayEvents = events.filter((e) => isEventOnDate(e, selectedDate));
 
   // Month calculations
-  const currentDate = new Date(selectedDate);
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth();
+  const [selectedYearStr, selectedMonthStr, selectedDayStr] = selectedDate.split('-');
+  const currentYear = parseInt(selectedYearStr, 10);
+  const currentMonth = parseInt(selectedMonthStr, 10) - 1; // 0-indexed (0 = Jan, 7 = Aug)
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
 
   const prevMonth = () => {
-    const d = new Date(currentYear, currentMonth - 1, 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    let y = currentYear;
+    let m = currentMonth - 1;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    }
+    const nextMStr = String(m + 1).padStart(2, '0');
+    setSelectedDate(`${y}-${nextMStr}-01`);
   };
 
   const nextMonth = () => {
-    const d = new Date(currentYear, currentMonth + 1, 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    let y = currentYear;
+    let m = currentMonth + 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+    const nextMStr = String(m + 1).padStart(2, '0');
+    setSelectedDate(`${y}-${nextMStr}-01`);
   };
 
 
@@ -265,8 +277,7 @@ export default function CalendarPage() {
   };
 
   const prevDay = () => {
-    const d = new Date(selectedDate + 'T00:00:00');
-    d.setDate(d.getDate() - 1);
+    const d = new Date(currentYear, currentMonth, parseInt(selectedDayStr, 10) - 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -274,8 +285,7 @@ export default function CalendarPage() {
   };
 
   const nextDay = () => {
-    const d = new Date(selectedDate + 'T00:00:00');
-    d.setDate(d.getDate() + 1);
+    const d = new Date(currentYear, currentMonth, parseInt(selectedDayStr, 10) + 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
