@@ -56,6 +56,7 @@ export interface CalendarEvent {
   end_time?: string | null; // HH:mm
   all_day: number; // 0 or 1
   location?: string | null;
+  image_url?: string | null;
   category: 'Family' | 'School' | 'Work' | 'Appointment' | 'Birthday' | 'Travel' | 'Health' | 'Other';
   recurrence_rule: 'NONE' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'YEARLY';
   reminder_minutes: number;

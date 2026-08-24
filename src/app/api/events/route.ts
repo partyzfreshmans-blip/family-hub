@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       endTime,
       allDay,
       location,
+      imageUrl,
       category,
       recurrenceRule,
       reminderMinutes,
@@ -79,9 +80,9 @@ export async function POST(req: NextRequest) {
       await execute(
         `INSERT INTO events (
           id, family_id, title, description, event_date, start_time, end_time,
-          all_day, location, category, recurrence_rule, reminder_minutes,
+          all_day, location, image_url, category, recurrence_rule, reminder_minutes,
           created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           eventId,
           ctx.family.id,
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
           endTime || null,
           allDay ? 1 : 0,
           location?.trim() || null,
+          imageUrl || body.image_url || null,
           category || 'Family',
           recurrenceRule || 'NONE',
           reminderMinutes || 0,
@@ -138,6 +140,7 @@ export async function PUT(req: NextRequest) {
       endTime,
       allDay,
       location,
+      imageUrl,
       category,
       recurrenceRule,
       reminderMinutes,
@@ -159,7 +162,7 @@ export async function PUT(req: NextRequest) {
       await execute(
         `UPDATE events SET 
           title = ?, description = ?, event_date = ?, start_time = ?, end_time = ?,
-          all_day = ?, location = ?, category = ?, recurrence_rule = ?,
+          all_day = ?, location = ?, image_url = ?, category = ?, recurrence_rule = ?,
           reminder_minutes = ?, updated_at = ?
          WHERE id = ? AND family_id = ?`,
         [
@@ -170,6 +173,7 @@ export async function PUT(req: NextRequest) {
           endTime || null,
           allDay ? 1 : 0,
           location?.trim() || null,
+          imageUrl !== undefined ? imageUrl : (body.image_url !== undefined ? body.image_url : null),
           category || 'Family',
           recurrenceRule || 'NONE',
           reminderMinutes || 0,

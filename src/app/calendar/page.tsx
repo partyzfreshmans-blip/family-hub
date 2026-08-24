@@ -18,6 +18,12 @@ import {
   Download,
   ExternalLink,
   Smartphone,
+  Image as ImageIcon,
+  Upload,
+  X,
+  Maximize2,
+  Navigation,
+  Loader2,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -27,7 +33,46 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
-import { CalendarEvent, FamilyMember } from '@/types';
+import { CalendarEvent, FamilyMember, FamilySavedPlace } from '@/types';
+
+function compressImage(file: File, maxDimension = 1280, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
 
 
 const categoryColorMap: Record<string, string> = {
@@ -116,6 +161,11 @@ export default function CalendarPage() {
   const [endTime, setEndTime] = useState('10:00');
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
+  const [savedPlaces, setSavedPlaces] = useState<FamilySavedPlace[]>([]);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [category, setCategory] = useState<any>('Family');
   const [recurrenceRule, setRecurrenceRule] = useState<any>('NONE');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
@@ -134,6 +184,12 @@ export default function CalendarPage() {
       if (memRes.ok) {
         const memJson = await memRes.json();
         setFamilyMembers(memJson.members || []);
+      }
+
+      const placesRes = await fetch('/api/location/places');
+      if (placesRes.ok) {
+        const placesJson = await placesRes.json();
+        setSavedPlaces(placesJson.places || []);
       }
     } catch (err) {
       console.error(err);
@@ -155,6 +211,7 @@ export default function CalendarPage() {
     setEndTime('10:00');
     setAllDay(false);
     setLocation('');
+    setImageUrl(null);
     setCategory('Family');
     setRecurrenceRule('NONE');
     setSelectedMembers(member ? [member.id] : []);
@@ -171,11 +228,63 @@ export default function CalendarPage() {
     setEndTime(evt.end_time || '10:00');
     setAllDay(evt.all_day === 1);
     setLocation(evt.location || '');
+    setImageUrl(evt.image_url || null);
     setCategory(evt.category);
     setRecurrenceRule(evt.recurrence_rule);
     setSelectedMembers(evt.member_ids || []);
     setFormError(null);
     setIsModalOpen(true);
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressingImage(true);
+      const compressed = await compressImage(file, 1280, 0.82);
+      setImageUrl(compressed);
+    } catch (err) {
+      console.error('Image compression error:', err);
+      alert('ไม่สามารถประมวลผลรูปภาพได้');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleGetGpsLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      alert('เบราว์เซอร์ไม่รองรับ GPS');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        let matched = '';
+        for (const p of savedPlaces) {
+          const dLat = (p.latitude - latitude) * 111320;
+          const dLon = (p.longitude - longitude) * 111320 * Math.cos((latitude * Math.PI) / 180);
+          const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+          if (dist <= (p.radius_meters || 100)) {
+            matched = p.name;
+            break;
+          }
+        }
+        if (matched) {
+          setLocation(matched);
+        } else {
+          setLocation(`พิกัด ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+        }
+        setIsLocating(false);
+      },
+      (err) => {
+        console.warn('GPS location error:', err);
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -193,6 +302,7 @@ export default function CalendarPage() {
         endTime: allDay ? null : endTime,
         allDay,
         location,
+        imageUrl,
         category,
         recurrenceRule,
         memberIds: selectedMembers,
@@ -308,6 +418,7 @@ export default function CalendarPage() {
     setEndTime(`${endH}:${String(m || 0).padStart(2, '0')}`);
     setAllDay(false);
     setLocation('');
+    setImageUrl(null);
     setCategory('Family');
     setRecurrenceRule('NONE');
     setSelectedMembers(member ? [member.id] : []);
@@ -474,11 +585,12 @@ export default function CalendarPage() {
                           {dayEvts.slice(0, 2).map((ev) => (
                             <div
                               key={ev.id}
-                              className={`text-[9px] px-1 py-0.5 rounded truncate font-medium ${
+                              className={`text-[9px] px-1 py-0.5 rounded truncate font-medium flex items-center gap-1 ${
                                 categoryColorMap[ev.category] || 'bg-primary text-white'
                               }`}
                             >
-                              {ev.title}
+                              {ev.image_url && <span className="text-[8px]">📷</span>}
+                              <span className="truncate">{ev.title}</span>
                             </div>
                           ))}
                         </div>
@@ -557,6 +669,18 @@ export default function CalendarPage() {
                           categoryColorMap[evt.category] || 'bg-primary text-white'
                         }`}
                       >
+                        {evt.image_url && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightboxImage(evt.image_url || null);
+                            }}
+                            className="p-0.5 hover:opacity-80"
+                            title="ดูรูปภาพ"
+                          >
+                            📷
+                          </span>
+                        )}
                         <span>{evt.title}</span>
                         {evt.location && <span className="text-[10px] opacity-80">📍 {evt.location}</span>}
                       </div>
@@ -655,30 +779,56 @@ export default function CalendarPage() {
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs font-extrabold text-foreground truncate">
-                                  {evt.title}
-                                </span>
-                                <Badge variant="primary" size="sm">
-                                  {t.calendar.categories[evt.category] || evt.category}
-                                </Badge>
-                                {evt.recurrence_rule && evt.recurrence_rule !== 'NONE' && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
-                                    🔄 {t.calendar.recurrenceOptions[evt.recurrence_rule]}
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                              {evt.image_url && (
+                                <img
+                                  src={evt.image_url}
+                                  alt={evt.title}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxImage(evt.image_url || null);
+                                  }}
+                                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl object-cover border border-border shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-xs"
+                                  title="แตะเพื่อขยายดูรูปภาพ"
+                                />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-extrabold text-foreground truncate">
+                                    {evt.title}
                                   </span>
+                                  <Badge variant="primary" size="sm">
+                                    {t.calendar.categories[evt.category] || evt.category}
+                                  </Badge>
+                                  {evt.recurrence_rule && evt.recurrence_rule !== 'NONE' && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
+                                      🔄 {t.calendar.recurrenceOptions[evt.recurrence_rule]}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {evt.description && (
+                                  <p className="text-[11px] text-muted-foreground truncate pt-0.5">
+                                    {evt.description}
+                                  </p>
                                 )}
                               </div>
-
-                              {evt.description && (
-                                <p className="text-[11px] text-muted-foreground truncate pt-0.5">
-                                  {evt.description}
-                                </p>
-                              )}
                             </div>
 
                             {/* Actions on Event Block */}
                             <div className="flex items-center gap-1 shrink-0">
+                              {evt.image_url && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxImage(evt.image_url || null);
+                                  }}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title="ดูรูปภาพแนบ"
+                                >
+                                  <ImageIcon className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <a
                                 href={getGoogleCalendarUrl(evt)}
                                 target="_blank"
@@ -721,10 +871,17 @@ export default function CalendarPage() {
                               </span>
 
                               {evt.location && (
-                                <span className="flex items-center gap-1 text-[11px] truncate max-w-[150px]">
-                                  <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
-                                  <span className="truncate">{evt.location}</span>
-                                </span>
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(evt.location)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-1 text-[11px] hover:text-blue-500 transition-colors"
+                                  title="เปิดใน Google Maps"
+                                >
+                                  <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                                  <span className="truncate max-w-[130px] font-medium">{evt.location}</span>
+                                </a>
                               )}
                             </div>
 
@@ -783,61 +940,105 @@ export default function CalendarPage() {
                 {dayEvents.map((evt) => (
                   <div
                     key={evt.id}
-                    className="p-4 rounded-2xl bg-muted/30 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/60 transition-colors"
+                    className="p-4 rounded-2xl bg-muted/30 border border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-muted/60 transition-colors"
                   >
-                    <div className="space-y-1.5 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            categoryColorMap[evt.category]?.split(' ')[0] || 'bg-primary'
-                          }`}
-                        />
-                        <h4 className="font-bold text-sm text-foreground truncate">{evt.title}</h4>
-                        <Badge variant="primary" size="sm">
-                          {t.calendar.categories[evt.category] || evt.category}
-                        </Badge>
-                      </div>
-
-                      {evt.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">{evt.description}</p>
+                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                      {evt.image_url && (
+                        <div
+                          onClick={() => setLightboxImage(evt.image_url || null)}
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border border-border shrink-0 cursor-pointer group relative shadow-xs"
+                          title="แตะเพื่อขยายดูรูปภาพเต็ม"
+                        >
+                          <img
+                            src={evt.image_url}
+                            alt={evt.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                            <Maximize2 className="w-4 h-4" />
+                          </div>
+                        </div>
                       )}
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
-                        <span className="flex items-center gap-1 font-semibold text-primary">
-                          <Clock className="w-3.5 h-3.5" />
-                          {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
-                        </span>
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              categoryColorMap[evt.category]?.split(' ')[0] || 'bg-primary'
+                            }`}
+                          />
+                          <h4 className="font-bold text-sm text-foreground truncate">{evt.title}</h4>
+                          <Badge variant="primary" size="sm">
+                            {t.calendar.categories[evt.category] || evt.category}
+                          </Badge>
+                          {evt.image_url && (
+                            <span
+                              onClick={() => setLightboxImage(evt.image_url || null)}
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary flex items-center gap-1 cursor-pointer hover:bg-primary/20 transition-colors"
+                              title="คลิกเพื่อดูรูปภาพ"
+                            >
+                              <ImageIcon className="w-3 h-3" /> มีรูปแนบ
+                            </span>
+                          )}
+                        </div>
 
-                        {evt.location && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5" />
-                            {evt.location}
+                        {evt.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{evt.description}</p>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
+                          <span className="flex items-center gap-1 font-semibold text-primary">
+                            <Clock className="w-3.5 h-3.5" />
+                            {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
                           </span>
-                        )}
 
-                        {evt.member_ids && evt.member_ids.length > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Users className="w-3.5 h-3.5" />
-                            <div className="flex -space-x-1">
-                              {evt.member_ids.map((mid) => {
-                                const m = familyMembers.find((mem) => mem.id === mid);
-                                return m ? (
-                                  <MemberAvatar
-                                    key={m.id}
-                                    name={m.nickname}
-                                    color={m.member_color}
-                                    size="sm"
-                                  />
-                                ) : null;
-                              })}
+                          {evt.location && (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(evt.location)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 hover:text-blue-500 hover:underline transition-colors"
+                              title="เปิดใน Google Maps"
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                              <span className="font-medium">{evt.location}</span>
+                              <ExternalLink className="w-3 h-3 opacity-60" />
+                            </a>
+                          )}
+
+                          {evt.member_ids && evt.member_ids.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" />
+                              <div className="flex -space-x-1">
+                                {evt.member_ids.map((mid) => {
+                                  const m = familyMembers.find((mem) => mem.id === mid);
+                                  return m ? (
+                                    <MemberAvatar
+                                      key={m.id}
+                                      name={m.nickname}
+                                      color={m.member_color}
+                                      size="sm"
+                                    />
+                                  ) : null;
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 self-end sm:self-auto">
+                    <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
+                      {evt.image_url && (
+                        <button
+                          onClick={() => setLightboxImage(evt.image_url || null)}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title="ดูรูปภาพ"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                        </button>
+                      )}
                       <a
                         href={getGoogleCalendarUrl(evt)}
                         target="_blank"
@@ -970,7 +1171,7 @@ export default function CalendarPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingEvent ? t.calendar.editEvent : t.calendar.addEvent}
-        maxWidth="md"
+        maxWidth="lg"
       >
         <form onSubmit={handleSave} className="space-y-4">
           {formError && (
@@ -1069,15 +1270,131 @@ export default function CalendarPage() {
             </div>
           )}
 
+          {/* Enhanced Location Section */}
           <div>
-            <label className="block text-xs font-bold mb-1">{t.calendar.location}</label>
-            <input
-              type="text"
-              placeholder="เช่น ร้านอาหารบ้านสวน, โรงพยาบาลกรุงเทพ"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold">{t.calendar.location}</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGetGpsLocation}
+                  disabled={isLocating}
+                  className="text-[11px] font-bold text-primary hover:text-primary-600 flex items-center gap-1 transition-colors"
+                >
+                  {isLocating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
+                  <span>{isLocating ? 'กำลังค้นหา...' : 'ปักหมุด GPS ปัจจุบัน'}</span>
+                </button>
+                {location && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-bold text-muted-foreground hover:text-blue-500 flex items-center gap-0.5"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>ดูบนแผนที่</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                placeholder="เช่น ร้านอาหารบ้านสวน, โรงพยาบาลกรุงเทพ หรือเลือกสถานที่ด่วนด้านล่าง"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* Quick select from saved family places */}
+            {savedPlaces.length > 0 && (
+              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-muted-foreground font-semibold">สถานที่ของบ้าน:</span>
+                {savedPlaces.slice(0, 6).map((place) => (
+                  <button
+                    key={place.id}
+                    type="button"
+                    onClick={() => setLocation(place.name)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                      location === place.name
+                        ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                        : 'border-border/60 bg-muted/40 text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {place.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Image Upload / Attachment Section */}
+          <div>
+            <label className="block text-xs font-bold mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-primary" />
+                <span>รูปภาพประกอบ / เอกสารแนบ (สลิป, ตารางงาน, บัตรคิว, แผนที่)</span>
+              </span>
+              {imageUrl && (
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> แนบรูปแล้ว
+                </span>
+              )}
+            </label>
+
+            {imageUrl ? (
+              <div className="relative group rounded-2xl overflow-hidden border border-border bg-muted/30 p-2.5 flex items-center gap-3">
+                <img
+                  src={imageUrl}
+                  alt="Event attachment"
+                  className="w-20 h-20 object-cover rounded-xl border border-border/80 shadow-xs cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+                  onClick={() => setLightboxImage(imageUrl)}
+                  title="แตะเพื่อขยายดูรูปขนาดเต็ม"
+                />
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <p className="text-xs font-bold text-foreground truncate">รูปภาพแนบสำหรับกิจกรรมนี้</p>
+                  <p className="text-[11px] text-muted-foreground">แตะที่รูปเพื่อขยายดูขนาดเต็ม</p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <label className="cursor-pointer px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-bold text-foreground flex items-center gap-1 transition-colors">
+                      <Upload className="w-3 h-3" />
+                      <span>เปลี่ยนรูป</span>
+                      <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl(null)}
+                      className="px-2.5 py-1 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>ลบรูป</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border hover:border-primary/60 rounded-2xl cursor-pointer bg-muted/20 hover:bg-muted/40 transition-all text-center group">
+                {isCompressingImage ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>กำลังประมวลผลและบีบอัดรูปภาพ...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-1 group-hover:scale-105 transition-transform">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-foreground">แตะเพื่อเลือกรูปภาพ หรือถ่ายภาพใหม่</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">JPG, PNG, WEBP (บีบอัดและปรับขนาดให้อัตโนมัติ)</span>
+                    <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                  </>
+                )}
+              </label>
+            )}
           </div>
 
           {/* Member Attendees Selection */}
@@ -1140,6 +1457,43 @@ export default function CalendarPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Lightbox Modal for Full Image View */}
+      {lightboxImage && (
+        <Modal
+          isOpen={!!lightboxImage}
+          onClose={() => setLightboxImage(null)}
+          title="รูปภาพกิจกรรม"
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div className="max-h-[70vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/5 dark:bg-black/40 p-2">
+              <img
+                src={lightboxImage}
+                alt="Event Full View"
+                className="max-h-[65vh] w-auto object-contain rounded-xl shadow-md"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <a
+                href={lightboxImage}
+                download="event-photo.jpg"
+                className="px-3.5 py-2 rounded-xl border border-border bg-card hover:bg-muted text-xs font-bold flex items-center gap-1.5 text-foreground transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>ดาวน์โหลดรูปภาพ</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-600 active:scale-95 transition-all"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Delete Confirmation */}
       <ConfirmDialog

@@ -103,6 +103,7 @@ const DB_SCHEMA = `
     end_time TEXT,
     all_day INTEGER DEFAULT 0,
     location TEXT,
+    image_url TEXT,
     category TEXT NOT NULL DEFAULT 'Family',
     recurrence_rule TEXT DEFAULT 'NONE',
     reminder_minutes INTEGER DEFAULT 0,
@@ -388,6 +389,11 @@ async function ensureTursoInitialized() {
   tursoInitPromise = (async () => {
     try {
       await tursoClient.executeMultiple(DB_SCHEMA);
+      try {
+        await tursoClient.execute('ALTER TABLE events ADD COLUMN image_url TEXT');
+      } catch (e) {
+        // column might already exist
+      }
       
       const checkRes = await tursoClient.execute('SELECT count(*) as count FROM families');
       const count = (checkRes.rows[0]?.count as number) || 0;
@@ -478,6 +484,11 @@ export async function getDb(): Promise<Database> {
 
       dbInstance.run('PRAGMA foreign_keys = ON;');
       dbInstance.exec(DB_SCHEMA);
+      try {
+        dbInstance.run('ALTER TABLE events ADD COLUMN image_url TEXT;');
+      } catch (e) {
+        // column might already exist
+      }
       initLocalSeedIfEmpty(dbInstance);
       saveDatabase();
       return dbInstance;
