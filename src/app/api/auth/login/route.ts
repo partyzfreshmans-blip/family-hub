@@ -18,11 +18,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const user = await queryOne<User & { password_hash: string }>(
-      'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE email = ?',
-      [cleanEmail]
+    const cleanInput = email.trim().toLowerCase();
+    let user = await queryOne<User & { password_hash: string }>(
+      'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE LOWER(email) = ?',
+      [cleanInput]
     );
+
+    if (!user) {
+      // Try matching by email username prefix (e.g. "ton" -> "ton@...")
+      user = await queryOne<User & { password_hash: string }>(
+        'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE LOWER(email) LIKE ?',
+        [`${cleanInput}@%`]
+      );
+    }
+
+    if (!user) {
+      // Try matching by family member nickname
+      const memMatch = await queryOne<{ user_id: string }>(
+        'SELECT user_id FROM family_members WHERE LOWER(nickname) = ? LIMIT 1',
+        [cleanInput]
+      );
+      if (memMatch) {
+        user = await queryOne<User & { password_hash: string }>(
+          'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE id = ?',
+          [memMatch.user_id]
+        );
+      }
+    }
 
     if (!user) {
       return NextResponse.json(

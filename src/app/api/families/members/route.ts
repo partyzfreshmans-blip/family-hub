@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only Family Admin can add members directly' }, { status: 403 });
     }
 
-    const { nickname, displayName, email, pin, password, role, memberColor } = await req.json();
+    const { nickname, displayName, email, pin, password, role, memberColor, initialPoints } = await req.json();
 
     if (!nickname || !nickname.trim()) {
       return NextResponse.json({ error: 'กรุณากรอกชื่อเรียกของสมาชิก' }, { status: 400 });
@@ -98,11 +98,12 @@ export async function POST(req: NextRequest) {
     const memberId = generateId('mem');
     const assignedRole = role || 'ADULT';
     const assignedColor = memberColor || '#0284c7';
+    const initialPts = initialPoints ? parseInt(initialPoints) || 0 : 0;
 
     await execute(
       `INSERT INTO family_members (id, family_id, user_id, role, nickname, member_color, points_balance, joined_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-      [memberId, ctx.family.id, userId, assignedRole, cleanNick, assignedColor, now]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [memberId, ctx.family.id, userId, assignedRole, cleanNick, assignedColor, initialPts, now]
     );
 
     return NextResponse.json({ success: true, memberId });
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH: Update member details or role (Admin can change role, user can change own nickname/color, and reset PIN/password)
+// PATCH: Update member details or role (Admin can change role, user can change own nickname/color, reset PIN/password, and adjust points)
 export async function PATCH(req: NextRequest) {
   try {
     const ctx = await getCurrentUserContext();
@@ -120,7 +121,20 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { memberId, role, nickname, displayName, email, pin, password, memberColor } = await req.json();
+    const {
+      memberId,
+      role,
+      nickname,
+      displayName,
+      email,
+      pin,
+      password,
+      memberColor,
+      pointsDelta,
+      pointsBalance,
+      pointsReason,
+    } = await req.json();
+
     if (!memberId) {
       return NextResponse.json({ error: 'Member ID required' }, { status: 400 });
     }
@@ -168,9 +182,38 @@ export async function PATCH(req: NextRequest) {
       [newRole, newNick, newColor, memberId, ctx.family.id]
     );
 
+    // Update Points if provided by Admin
+    const now = new Date().toISOString();
+    if (isAdmin && (pointsDelta !== undefined || pointsBalance !== undefined)) {
+      let newBalance = targetMember.points_balance;
+      let change = 0;
+      if (pointsBalance !== undefined) {
+        newBalance = Math.max(0, parseInt(pointsBalance) || 0);
+        change = newBalance - targetMember.points_balance;
+      } else if (pointsDelta !== undefined) {
+        change = parseInt(pointsDelta) || 0;
+        newBalance = Math.max(0, targetMember.points_balance + change);
+      }
+
+      if (change !== 0) {
+        await execute('UPDATE family_members SET points_balance = ? WHERE id = ?', [newBalance, memberId]);
+        await execute(
+          `INSERT INTO points_transactions (id, family_id, family_member_id, points, source_type, description, created_at)
+           VALUES (?, ?, ?, ?, 'ADMIN_ADJUST', ?, ?)`,
+          [
+            generateId('ptx'),
+            ctx.family.id,
+            memberId,
+            change,
+            pointsReason || (change > 0 ? `ผู้ดูแลปรับเพิ่มแต้ม (+${change})` : `ผู้ดูแลปรับลดแต้ม (${change})`),
+            now,
+          ]
+        );
+      }
+    }
+
     // Update User details (display_name, email, password/PIN if provided)
     const passOrPin = pin || password;
-    const now = new Date().toISOString();
 
     if (displayName || email || passOrPin) {
       const user = await queryOne<{ id: string; email: string; display_name: string }>(
