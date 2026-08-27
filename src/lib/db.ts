@@ -377,6 +377,30 @@ const DB_SCHEMA = `
     FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL CHECK(category IN ('HOUSE', 'VEHICLE', 'PERSONAL', 'FINANCE', 'OTHER')),
+    sub_category TEXT,
+    document_number TEXT,
+    issuer TEXT,
+    owner_member_id TEXT,
+    privacy_level TEXT NOT NULL DEFAULT 'FAMILY' CHECK(privacy_level IN ('FAMILY', 'ADULTS', 'PRIVATE')),
+    issue_date TEXT,
+    expiry_date TEXT,
+    file_url TEXT,
+    file_name TEXT,
+    file_type TEXT,
+    notes TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_member_id) REFERENCES family_members(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_members_family ON family_members(family_id);
   CREATE INDEX IF NOT EXISTS idx_members_user ON family_members(user_id);
   CREATE INDEX IF NOT EXISTS idx_events_family_date ON events(family_id, event_date);
@@ -391,6 +415,8 @@ const DB_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_loc_places_family ON family_saved_places(family_id);
   CREATE INDEX IF NOT EXISTS idx_loc_req_family ON location_requests(family_id, target_member_id, status);
   CREATE INDEX IF NOT EXISTS idx_sos_family ON sos_events(family_id, status);
+  CREATE INDEX IF NOT EXISTS idx_docs_family ON documents(family_id, category);
+  CREATE INDEX IF NOT EXISTS idx_docs_expiry ON documents(family_id, expiry_date);
 `;
 
 async function ensureTursoInitialized() {

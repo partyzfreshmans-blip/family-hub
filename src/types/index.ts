@@ -323,3 +323,33 @@ export interface SosEvent {
   last_updated_at: string;
   member?: FamilyMember;
 }
+
+export type DocumentCategory = 'HOUSE' | 'VEHICLE' | 'PERSONAL' | 'FINANCE' | 'OTHER';
+export type DocumentPrivacyLevel = 'FAMILY' | 'ADULTS' | 'PRIVATE';
+
+export interface FamilyDocument {
+  id: string;
+  family_id: string;
+  title: string;
+  category: DocumentCategory;
+  sub_category?: string | null;
+  document_number?: string | null;
+  issuer?: string | null;
+  owner_member_id?: string | null;
+  privacy_level: DocumentPrivacyLevel;
+  issue_date?: string | null; // YYYY-MM-DD
+  expiry_date?: string | null; // YYYY-MM-DD
+  file_url?: string | null;
+  file_name?: string | null;
+  file_type?: string | null;
+  notes?: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  owner_nick?: string;
+  owner_color?: string;
+  owner_avatar?: string | null;
+  creator_nick?: string;
+  expiry_status?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY';
+  days_until_expiry?: number | null;
+}

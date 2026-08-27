@@ -22,6 +22,7 @@ import {
   Sparkles,
   ChevronDown,
   MapPin,
+  FolderOpen,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useTheme } from '@/components/ThemeContext';
@@ -56,6 +57,7 @@ export function AppShell({ children }: AppShellProps) {
     { label: t.nav.location, href: '/location', icon: MapPin },
     { label: t.nav.expenses, href: '/expenses', icon: DollarSign, hideForChild: true },
     { label: t.nav.bills, href: '/bills', icon: Receipt, hideForChild: true },
+    { label: t.nav.documents, href: '/documents', icon: FolderOpen },
     { label: t.nav.family, href: '/family', icon: Users },
     { label: t.nav.rewards, href: '/rewards', icon: Award },
     { label: t.nav.info, href: '/info', icon: Info },
