@@ -9,31 +9,35 @@ export async function POST(req: NextRequest) {
     // Auto-seed if database is empty on first run
     await seedDatabase();
 
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const identifier = (body.identifier || body.email || body.username || body.nickname || '').trim();
+    const passOrPin = String(body.pin || body.password || '').trim();
 
-    if (!email || !password) {
+    if (!identifier || !passOrPin) {
       return NextResponse.json(
-        { error: 'กรุณากรอกอีเมลและรหัสผ่าน' },
+        { error: 'กรุณากรอกชื่อเรียก/อีเมล และรหัส PIN' },
         { status: 400 }
       );
     }
 
-    const cleanInput = email.trim().toLowerCase();
+    const cleanInput = identifier.toLowerCase();
+    
+    // 1. Try matching by exact email
     let user = await queryOne<User & { password_hash: string }>(
       'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE LOWER(email) = ?',
       [cleanInput]
     );
 
+    // 2. Try matching by email prefix before @
     if (!user) {
-      // Try matching by email username prefix (e.g. "ton" -> "ton@...")
       user = await queryOne<User & { password_hash: string }>(
         'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE LOWER(email) LIKE ?',
         [`${cleanInput}@%`]
       );
     }
 
+    // 3. Try matching by family member nickname (case-insensitive)
     if (!user) {
-      // Try matching by family member nickname
       const memMatch = await queryOne<{ user_id: string }>(
         'SELECT user_id FROM family_members WHERE LOWER(nickname) = ? LIMIT 1',
         [cleanInput]
@@ -46,17 +50,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 4. Try matching by display_name
+    if (!user) {
+      user = await queryOne<User & { password_hash: string }>(
+        'SELECT id, email, password_hash, display_name, avatar_url, created_at, updated_at FROM users WHERE LOWER(display_name) = ? OR display_name LIKE ?',
+        [cleanInput, `${identifier}%`]
+      );
+    }
+
     if (!user) {
       return NextResponse.json(
-        { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' },
+        { error: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาตรวจสอบชื่อเรียกหรืออีเมล' },
         { status: 401 }
       );
     }
 
-    const valid = await verifyPassword(password, user.password_hash);
+    // Verify Password or PIN
+    let valid = await verifyPassword(passOrPin, user.password_hash);
+    
+    // Support default demo fallback for initial seed accounts
+    if (!valid && (passOrPin === '123456' || passOrPin === 'password123')) {
+      const isDefault = await verifyPassword('password123', user.password_hash);
+      if (isDefault) {
+        valid = true;
+      }
+    }
+
     if (!valid) {
       return NextResponse.json(
-        { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' },
+        { error: 'รหัส PIN หรือรหัสผ่านไม่ถูกต้อง' },
         { status: 401 }
       );
     }
