@@ -24,6 +24,7 @@ import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { Badge } from '@/components/ui/Badge';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 
 interface FamilyAuthMember {
   id: string;
@@ -154,7 +155,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-gradient-to-b from-sky-50/50 via-background to-background dark:from-sky-950/20">
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-gradient-to-b from-sky-50/50 via-background to-background dark:from-sky-950/20 relative">
+      {/* Top Floating Language Switcher */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageSwitcher variant="pill" className="shadow-sm bg-card/80 backdrop-blur-md" />
+      </div>
+
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">

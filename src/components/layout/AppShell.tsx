@@ -27,6 +27,7 @@ import { useLanguage } from '@/components/LanguageContext';
 import { useTheme } from '@/components/ThemeContext';
 import { useAuth } from '@/components/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { QuickAddModal } from '@/components/layout/QuickAddModal';
 
 interface AppShellProps {
@@ -182,8 +183,8 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           )}
 
-          {/* Theme & Logout Controls */}
-          <div className="flex items-center justify-between px-1">
+          {/* Theme, Language & Logout Controls */}
+          <div className="flex items-center justify-between px-1 gap-1.5 flex-wrap">
             <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
               <button
                 onClick={() => setTheme('light')}
@@ -207,6 +208,8 @@ export function AppShell({ children }: AppShellProps) {
                 <Laptop className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <LanguageSwitcher variant="pill" />
 
             <button
               onClick={() => logout()}
@@ -247,6 +250,8 @@ export function AppShell({ children }: AppShellProps) {
               <MapPin className="w-3.5 h-3.5 shrink-0" />
               <span className="text-[11px] font-extrabold">ตำแหน่ง</span>
             </Link>
+
+            <LanguageSwitcher variant="pill" className="shrink-0" />
 
             {family?.rewards_enabled === 1 && (
               <Link
