@@ -854,12 +854,15 @@ export default function DocumentsPage() {
                 <label className="block text-xs font-bold text-foreground mb-1.5">
                   {t.documents.issueDate}
                 </label>
-                <input
-                  type="date"
-                  value={formIssueDate}
-                  onChange={(e) => setFormIssueDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={formIssueDate}
+                    onChange={(e) => setFormIssueDate(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
 
               <div>
@@ -875,12 +878,15 @@ export default function DocumentsPage() {
                     </button>
                   )}
                 </label>
-                <input
-                  type="date"
-                  value={formExpiryDate}
-                  onChange={(e) => setFormExpiryDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={formExpiryDate}
+                    onChange={(e) => setFormExpiryDate(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
             </div>
 

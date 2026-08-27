@@ -22,6 +22,7 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 199 89% 48%;
     --radius: 1rem;
+    color-scheme: light;
   }
 
   .dark {
@@ -40,7 +41,34 @@
     --border: 216 34% 17%;
     --input: 216 34% 17%;
     --ring: 199 89% 48%;
+    color-scheme: dark;
   }
+}
+
+/* Date and Time Picker Indicators styling for high contrast in both light & dark mode */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  background-color: transparent;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  opacity: 0.85;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.75) contrast(1.2);
+  opacity: 0.95;
 }
 
 * {

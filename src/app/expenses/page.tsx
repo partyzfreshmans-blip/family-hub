@@ -578,13 +578,16 @@ export default function ExpensesPage() {
 
           <div>
             <label className="block text-xs font-bold mb-1">{t.expenses.expenseDate}</label>
-            <input
-              type="date"
-              required
-              value={expenseDate}
-              onChange={(e) => setExpenseDate(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <div className="relative">
+              <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="date"
+                required
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
           {/* Enhanced Location Section */}

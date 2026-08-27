@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar, CheckSquare, ShoppingCart, DollarSign, Receipt, ArrowLeft, Plus } from 'lucide-react';
+import { Calendar, CheckSquare, ShoppingCart, DollarSign, Receipt, ArrowLeft, Plus, Clock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -274,22 +274,28 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">{t.calendar.eventDate}</label>
-                  <input
-                    type="date"
-                    required
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="date"
+                      required
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">{t.calendar.startTime}</label>
-                  <input
-                    type="time"
-                    value={eventStartTime}
-                    onChange={(e) => setEventStartTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  <div className="relative">
+                    <Clock className="w-4 h-4 text-sky-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="time"
+                      value={eventStartTime}
+                      onChange={(e) => setEventStartTime(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -325,12 +331,15 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">{t.tasks.dueDate}</label>
-                  <input
-                    type="date"
-                    value={taskDueDate}
-                    onChange={(e) => setTaskDueDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="date"
+                      value={taskDueDate}
+                      onChange={(e) => setTaskDueDate(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">{t.tasks.priority}</label>
@@ -467,13 +476,16 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">{t.bills.dueDate}</label>
-                  <input
-                    type="date"
-                    required
-                    value={billDueDate}
-                    onChange={(e) => setBillDueDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="date"
+                      required
+                      value={billDueDate}
+                      onChange={(e) => setBillDueDate(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                 </div>
               </div>
               <div>

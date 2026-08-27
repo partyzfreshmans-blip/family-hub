@@ -7,6 +7,7 @@ import {
   Circle,
   CheckCircle2,
   Clock,
+  Calendar,
   User,
   Sparkles,
   AlertCircle,
@@ -626,21 +627,27 @@ export default function TasksPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold mb-1">{t.tasks.dueDate}</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="relative">
+                <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold mb-1">{t.tasks.dueTime}</label>
-              <input
-                type="time"
-                value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="relative">
+                <Clock className="w-4 h-4 text-sky-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
             </div>
           </div>
 

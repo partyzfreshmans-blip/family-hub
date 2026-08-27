@@ -1195,13 +1195,16 @@ export default function CalendarPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold mb-1">{t.calendar.eventDate} *</label>
-              <input
-                type="date"
-                required
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="relative">
+                <CalendarIcon className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="date"
+                  required
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold mb-1">{t.calendar.category}</label>
@@ -1251,21 +1254,27 @@ export default function CalendarPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold mb-1">{t.calendar.startTime}</label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div className="relative">
+                  <Clock className="w-4 h-4 text-sky-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold mb-1">{t.calendar.endTime}</label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div className="relative">
+                  <Clock className="w-4 h-4 text-sky-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
             </div>
           )}
