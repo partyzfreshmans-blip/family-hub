@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { MemberCurrentLocation, MemberLocationHistory, FamilySavedPlace } from '@/types';
 import { useLanguage } from '@/components/LanguageContext';
@@ -52,27 +52,41 @@ export default function MemberDetailModal({
   const [savingPlace, setSavingPlace] = useState(false);
   const [placeSuccessMsg, setPlaceSuccessMsg] = useState<string | null>(null);
 
+  const lastOpenedMemberIdRef = useRef<string | null>(null);
+
   const mem = memberLocation?.member;
   const nickname = mem?.nickname || 'สมาชิก';
   const color = mem?.member_color || '#3b82f6';
   const hasCoordinates = memberLocation && memberLocation.latitude !== 0 && memberLocation.longitude !== 0;
 
   useEffect(() => {
-    if (isOpen && memberLocation?.family_member_id) {
+    const currentMemberId = memberLocation?.family_member_id;
+    if (isOpen && currentMemberId) {
+      // Only reset the naming form and show loading if opening modal for a new member or first time opening
+      if (lastOpenedMemberIdRef.current !== currentMemberId) {
+        lastOpenedMemberIdRef.current = currentMemberId;
+        setIsNamingPlace(false);
+        setPlaceName('');
+        setCustomCoords(null);
+        setPlaceSuccessMsg(null);
+        setLoadingHistory(true);
+        fetch(`/api/location/history?memberId=${currentMemberId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (Array.isArray(data)) setHistory(data);
+          })
+          .catch(console.error)
+          .finally(() => setLoadingHistory(false));
+      }
+    } else if (!isOpen) {
+      // When modal is closed, reset tracked member and states
+      lastOpenedMemberIdRef.current = null;
       setIsNamingPlace(false);
       setPlaceName('');
       setCustomCoords(null);
       setPlaceSuccessMsg(null);
-      setLoadingHistory(true);
-      fetch(`/api/location/history?memberId=${memberLocation.family_member_id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setHistory(data);
-        })
-        .catch(console.error)
-        .finally(() => setLoadingHistory(false));
     }
-  }, [isOpen, memberLocation]);
+  }, [isOpen, memberLocation?.family_member_id]);
 
   const handleOpenNamingForm = (coords?: { lat: number; lng: number }) => {
     if (coords) {
