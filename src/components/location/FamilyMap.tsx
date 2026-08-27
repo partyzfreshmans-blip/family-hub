@@ -14,6 +14,7 @@ interface FamilyMapProps {
   selectedMemberId?: string | null;
   onSelectMember?: (memberId: string) => void;
   myLocation?: { latitude: number; longitude: number; accuracy?: number } | null;
+  focusCoords?: { latitude: number; longitude: number; name?: string; timestamp?: number } | null;
 }
 
 export default function FamilyMap({
@@ -23,6 +24,7 @@ export default function FamilyMap({
   selectedMemberId,
   onSelectMember,
   myLocation,
+  focusCoords,
 }: FamilyMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -237,6 +239,25 @@ export default function FamilyMap({
       });
     }
   }, [selectedMemberId]);
+
+  // Center to focused coordinates (e.g. from Saved Places)
+  useEffect(() => {
+    if (!focusCoords || !mapInstanceRef.current) return;
+    if (focusCoords.latitude && focusCoords.longitude) {
+      mapInstanceRef.current.setView([focusCoords.latitude, focusCoords.longitude], 17, {
+        animate: true,
+      });
+      if (focusCoords.name) {
+        import('leaflet').then((L) => {
+          if (!mapInstanceRef.current) return;
+          L.popup({ offset: [0, -10] })
+            .setLatLng([focusCoords.latitude, focusCoords.longitude])
+            .setContent(`<div style="font-weight: bold; font-size: 12px; padding: 4px;">📍 ${focusCoords.name}</div>`)
+            .openOn(mapInstanceRef.current);
+        });
+      }
+    }
+  }, [focusCoords]);
 
   // Fit all members button action
   const fitAllMembers = () => {

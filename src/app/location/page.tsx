@@ -63,6 +63,7 @@ export default function LocationPage() {
 
   // Browser GPS State
   const [myCoords, setMyCoords] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
+  const [focusMapCoords, setFocusMapCoords] = useState<{ latitude: number; longitude: number; name?: string; timestamp?: number } | null>(null);
   const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -394,6 +395,7 @@ export default function LocationPage() {
           places={places}
           activeSos={activeSos}
           selectedMemberId={selectedMemberId}
+          focusCoords={focusMapCoords}
           onSelectMember={(id) => {
             setSelectedMemberId(id);
             setDetailModalOpen(true);
@@ -449,6 +451,15 @@ export default function LocationPage() {
           onClose={() => setPlacesModalOpen(false)}
           places={places}
           onPlacesUpdated={loadLocationData}
+          onFocusPlace={(place) => {
+            setFocusMapCoords({
+              latitude: place.latitude,
+              longitude: place.longitude,
+              name: place.name,
+              timestamp: Date.now(),
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           myCoordinates={myCoords}
         />
 

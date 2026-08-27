@@ -4,13 +4,26 @@ import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { FamilySavedPlace } from '@/types';
 import { useLanguage } from '@/components/LanguageContext';
-import { MapPin, Plus, Trash2, Crosshair, Home, GraduationCap, Briefcase, HeartHandshake, Building2 } from 'lucide-react';
+import {
+  MapPin,
+  Plus,
+  Trash2,
+  Crosshair,
+  Home,
+  GraduationCap,
+  Briefcase,
+  HeartHandshake,
+  Building2,
+  ExternalLink,
+  Navigation,
+} from 'lucide-react';
 
 interface SavedPlacesModalProps {
   isOpen: boolean;
   onClose: () => void;
   places: FamilySavedPlace[];
   onPlacesUpdated: () => void;
+  onFocusPlace?: (place: FamilySavedPlace) => void;
   myCoordinates?: { latitude: number; longitude: number } | null;
 }
 
@@ -19,6 +32,7 @@ export default function SavedPlacesModal({
   onClose,
   places,
   onPlacesUpdated,
+  onFocusPlace,
   myCoordinates,
 }: SavedPlacesModalProps) {
   const { t } = useLanguage();
@@ -92,36 +106,75 @@ export default function SavedPlacesModal({
     }
   };
 
+  const handleFocus = (place: FamilySavedPlace) => {
+    if (onFocusPlace) {
+      onFocusPlace(place);
+    }
+    onClose();
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t.location.savedPlaces} maxWidth="md">
       <div className="space-y-5">
         {/* Place List */}
-        <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
           {places.length > 0 ? (
             places.map((place) => (
               <div
                 key={place.id}
-                className="p-3.5 rounded-2xl bg-card border border-border/80 flex items-center justify-between shadow-sm"
+                className="p-3.5 rounded-2xl bg-card border border-border/80 hover:border-primary/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-all group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-secondary/80 flex items-center justify-center">
+                <div
+                  onClick={() => handleFocus(place)}
+                  className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                  title="คลิกเพื่อดูสถานที่นี้บนแผนที่"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-secondary/80 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                     {getCategoryIcon(place.category)}
                   </div>
-                  <div>
-                    <h4 className="font-bold text-foreground text-sm">{place.name}</h4>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-foreground text-sm group-hover:text-primary transition-colors truncate">
+                      {place.name}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
                       รัศมี {place.radius_meters} เมตร • {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}
                     </p>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleDeletePlace(place.id)}
-                  className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                  title="ลบสถานที่"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
+                  {/* View on Map Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleFocus(place)}
+                    className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold flex items-center gap-1.5 transition-all"
+                    title="ดูตำแหน่งนี้บนแผนที่"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>ดูบนแผนที่</span>
+                  </button>
+
+                  {/* Google Maps Nav Link */}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-2 rounded-xl text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all"
+                    title="เปิดใน Google Maps"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePlace(place.id)}
+                    className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                    title="ลบสถานที่"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))
           ) : (
