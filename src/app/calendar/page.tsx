@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -24,6 +24,8 @@ import {
   Maximize2,
   Navigation,
   Loader2,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -142,6 +144,7 @@ export default function CalendarPage() {
 
   const [view, setView] = useState<'day' | 'week' | 'month'>('month');
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+  const [bottomTab, setBottomTab] = useState<'selected' | 'incoming'>('selected');
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -343,6 +346,43 @@ export default function CalendarPage() {
 
   // Filter events for selected date using recurrence rules
   const dayEvents = events.filter((e) => isEventOnDate(e, selectedDate));
+
+  // Compute upcoming/incoming events from today onwards (next 30 days)
+  const incomingEvents = useMemo(() => {
+    const today = getTodayDateString();
+    const result: { event: CalendarEvent; instanceDate: string; daysAway: number }[] = [];
+    const now = new Date(today + 'T00:00:00');
+
+    // Scan next 30 days
+    for (let i = 0; i <= 30; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dStr = `${y}-${m}-${day}`;
+
+      events.forEach((evt) => {
+        if (isEventOnDate(evt, dStr)) {
+          result.push({
+            event: evt,
+            instanceDate: dStr,
+            daysAway: i,
+          });
+        }
+      });
+    }
+
+    // Sort by instanceDate ASC, start_time ASC
+    result.sort((a, b) => {
+      if (a.instanceDate !== b.instanceDate) {
+        return a.instanceDate.localeCompare(b.instanceDate);
+      }
+      return (a.event.start_time || '00:00').localeCompare(b.event.start_time || '00:00');
+    });
+
+    return result;
+  }, [events]);
 
   // Month calculations
   const [selectedYearStr, selectedMonthStr, selectedDayStr] = selectedDate.split('-');
@@ -910,161 +950,456 @@ export default function CalendarPage() {
             </div>
           )}
 
-          {/* Selected Date Events List */}
+          {/* Selected Date & Incoming Events Card */}
           <div className="bg-card text-card-foreground rounded-3xl p-5 border border-border shadow-soft space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border/60">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-primary" />
-                <h3 className="font-bold text-base">
-                  กิจกรรมวันที่ {formatThaiDate(selectedDate, { showDayOfWeek: true })}
-                </h3>
+            {/* Header with Dual Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
+              <div className="flex items-center p-1 rounded-2xl bg-muted/60 border border-border/80 text-xs font-bold w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setBottomTab('selected')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
+                    bottomTab === 'selected'
+                      ? 'bg-card text-primary shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  <span>วันที่เลือก ({dayEvents.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBottomTab('incoming')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
+                    bottomTab === 'incoming'
+                      ? 'bg-card text-primary shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{t.calendar.incomingEvents || 'กิจกรรมที่จะมาถึง'} ({incomingEvents.length})</span>
+                </button>
               </div>
 
-              <button
-                onClick={() => openAddModal(selectedDate)}
-                className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
-              >
-                <Plus className="w-3.5 h-3.5" /> เพิ่มในวันนี้
-              </button>
+              <div className="flex items-center justify-between sm:justify-end gap-2">
+                {bottomTab === 'selected' && (
+                  <span className="text-xs font-extrabold text-foreground truncate">
+                    {formatThaiDate(selectedDate, { showDayOfWeek: true })}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openAddModal(selectedDate)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-white text-xs font-extrabold hover:bg-primary-600 active:scale-95 transition-all shadow-xs shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{t.calendar.addEvent}</span>
+                </button>
+              </div>
             </div>
 
-            {dayEvents.length === 0 ? (
-              <EmptyState
-                icon={CalendarIcon}
-                title="ยังไม่มีกิจกรรมในวันนี้"
-                actionText="เพิ่มกิจกรรมใหม่"
-                onAction={() => openAddModal(selectedDate)}
-              />
-            ) : (
-              <div className="space-y-3">
-                {dayEvents.map((evt) => (
-                  <div
-                    key={evt.id}
-                    className="p-4 rounded-2xl bg-muted/30 border border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-muted/60 transition-colors"
-                  >
-                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                      {evt.image_url && (
-                        <div
-                          onClick={() => setLightboxImage(evt.image_url || null)}
-                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border border-border shrink-0 cursor-pointer group relative shadow-xs"
-                          title="แตะเพื่อขยายดูรูปภาพเต็ม"
-                        >
-                          <img
-                            src={evt.image_url}
-                            alt={evt.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                          />
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                            <Maximize2 className="w-4 h-4" />
-                          </div>
-                        </div>
-                      )}
+            {/* TAB 1: Selected Date View */}
+            {bottomTab === 'selected' && (
+              <>
+                {dayEvents.length === 0 ? (
+                  <div className="space-y-4">
+                    <EmptyState
+                      icon={CalendarIcon}
+                      title="ยังไม่มีกิจกรรมในวันนี้"
+                      description={`วันที่ ${formatThaiDate(selectedDate, { showDayOfWeek: true })} ยังไม่มีกิจกรรมครอบครัว`}
+                      actionText="เพิ่มกิจกรรมใหม่"
+                      onAction={() => openAddModal(selectedDate)}
+                    />
 
-                      <div className="space-y-1.5 min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full ${
-                              categoryColorMap[evt.category]?.split(' ')[0] || 'bg-primary'
-                            }`}
-                          />
-                          <h4 className="font-bold text-sm text-foreground truncate">{evt.title}</h4>
-                          <Badge variant="primary" size="sm">
-                            {t.calendar.categories[evt.category] || evt.category}
-                          </Badge>
+                    {/* Incoming Events Preview when selected date is empty */}
+                    {incomingEvents.length > 0 && (
+                      <div className="pt-3 border-t border-border/70 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-extrabold text-sm text-foreground flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-amber-500" />
+                            <span>{t.calendar.incomingEvents || 'กิจกรรมที่จะมาถึงเร็วๆ นี้'}</span>
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => setBottomTab('incoming')}
+                            className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                          >
+                            <span>ดูทั้งหมด ({incomingEvents.length})</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {incomingEvents.slice(0, 4).map(({ event: evt, instanceDate, daysAway }) => (
+                            <div
+                              key={`${evt.id}-${instanceDate}`}
+                              onClick={() => setSelectedDate(instanceDate)}
+                              className="p-3.5 rounded-2xl bg-card border border-border/80 hover:border-primary/50 cursor-pointer transition-all shadow-2xs hover:shadow-sm space-y-2 group"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg ${
+                                    daysAway === 0
+                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                      : daysAway === 1
+                                      ? 'bg-primary/15 text-primary'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  {daysAway === 0
+                                    ? 'วันนี้'
+                                    : daysAway === 1
+                                    ? 'พรุ่งนี้'
+                                    : daysAway === 2
+                                    ? 'มะรืนนี้'
+                                    : `อีก ${daysAway} วัน (${formatThaiDate(instanceDate)})`}
+                                </span>
+
+                                <Badge variant="primary" size="sm">
+                                  {t.calendar.categories[evt.category] || evt.category}
+                                </Badge>
+                              </div>
+
+                              <div>
+                                <h5 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">
+                                  {evt.title}
+                                </h5>
+                                {evt.description && (
+                                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                    {evt.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                                <span className="flex items-center gap-1 text-primary font-semibold text-[11px]">
+                                  <Clock className="w-3 h-3" />
+                                  {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
+                                </span>
+
+                                {evt.location && (
+                                  <span className="flex items-center gap-1 text-[11px] truncate max-w-[120px]">
+                                    <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                                    <span className="truncate">{evt.location}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {dayEvents.map((evt) => (
+                      <div
+                        key={evt.id}
+                        className="p-4 rounded-2xl bg-muted/30 border border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-muted/60 transition-colors"
+                      >
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
                           {evt.image_url && (
-                            <span
+                            <div
                               onClick={() => setLightboxImage(evt.image_url || null)}
-                              className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary flex items-center gap-1 cursor-pointer hover:bg-primary/20 transition-colors"
-                              title="คลิกเพื่อดูรูปภาพ"
+                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border border-border shrink-0 cursor-pointer group relative shadow-xs"
+                              title="แตะเพื่อขยายดูรูปภาพเต็ม"
                             >
-                              <ImageIcon className="w-3 h-3" /> มีรูปแนบ
-                            </span>
-                          )}
-                        </div>
-
-                        {evt.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2">{evt.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
-                          <span className="flex items-center gap-1 font-semibold text-primary">
-                            <Clock className="w-3.5 h-3.5" />
-                            {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
-                          </span>
-
-                          {evt.location && (
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(evt.location)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 hover:text-blue-500 hover:underline transition-colors"
-                              title="เปิดใน Google Maps"
-                            >
-                              <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                              <span className="font-medium">{evt.location}</span>
-                              <ExternalLink className="w-3 h-3 opacity-60" />
-                            </a>
-                          )}
-
-                          {evt.member_ids && evt.member_ids.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Users className="w-3.5 h-3.5" />
-                              <div className="flex -space-x-1">
-                                {evt.member_ids.map((mid) => {
-                                  const m = familyMembers.find((mem) => mem.id === mid);
-                                  return m ? (
-                                    <MemberAvatar
-                                      key={m.id}
-                                      name={m.nickname}
-                                      color={m.member_color}
-                                      size="sm"
-                                    />
-                                  ) : null;
-                                })}
+                              <img
+                                src={evt.image_url}
+                                alt={evt.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Maximize2 className="w-4 h-4" />
                               </div>
                             </div>
                           )}
+
+                          <div className="space-y-1.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`w-2.5 h-2.5 rounded-full ${
+                                  categoryColorMap[evt.category]?.split(' ')[0] || 'bg-primary'
+                                }`}
+                              />
+                              <h4 className="font-bold text-sm text-foreground truncate">{evt.title}</h4>
+                              <Badge variant="primary" size="sm">
+                                {t.calendar.categories[evt.category] || evt.category}
+                              </Badge>
+                              {evt.image_url && (
+                                <span
+                                  onClick={() => setLightboxImage(evt.image_url || null)}
+                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary flex items-center gap-1 cursor-pointer hover:bg-primary/20 transition-colors"
+                                  title="คลิกเพื่อดูรูปภาพ"
+                                >
+                                  <ImageIcon className="w-3 h-3" /> มีรูปแนบ
+                                </span>
+                              )}
+                            </div>
+
+                            {evt.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-2">{evt.description}</p>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
+                              <span className="flex items-center gap-1 font-semibold text-primary">
+                                <Clock className="w-3.5 h-3.5" />
+                                {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
+                              </span>
+
+                              {evt.location && (
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(evt.location)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 hover:text-blue-500 hover:underline transition-colors"
+                                  title="เปิดใน Google Maps"
+                                >
+                                  <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                  <span className="font-medium">{evt.location}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              )}
+
+                              {evt.member_ids && evt.member_ids.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <Users className="w-3.5 h-3.5" />
+                                  <div className="flex -space-x-1">
+                                    {evt.member_ids.map((mid) => {
+                                      const m = familyMembers.find((mem) => mem.id === mid);
+                                      return m ? (
+                                        <MemberAvatar
+                                          key={m.id}
+                                          name={m.nickname}
+                                          color={m.member_color}
+                                          size="sm"
+                                        />
+                                      ) : null;
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
+                          {evt.image_url && (
+                            <button
+                              onClick={() => setLightboxImage(evt.image_url || null)}
+                              className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="ดูรูปภาพ"
+                            >
+                              <ImageIcon className="w-4 h-4" />
+                            </button>
+                          )}
+                          <a
+                            href={getGoogleCalendarUrl(evt)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex items-center gap-1 text-xs font-semibold"
+                            title="เพิ่มลง Google Calendar"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                          <button
+                            onClick={() => openEditModal(evt)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            title={t.common.edit}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeletingId(evt.id)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            title={t.common.delete}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
-                      {evt.image_url && (
-                        <button
-                          onClick={() => setLightboxImage(evt.image_url || null)}
-                          className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                          title="ดูรูปภาพ"
-                        >
-                          <ImageIcon className="w-4 h-4" />
-                        </button>
-                      )}
-                      <a
-                        href={getGoogleCalendarUrl(evt)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex items-center gap-1 text-xs font-semibold"
-                        title="เพิ่มลง Google Calendar"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                      <button
-                        onClick={() => openEditModal(evt)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        title={t.common.edit}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeletingId(evt.id)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                        title={t.common.delete}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                )}
+              </>
+            )}
+
+            {/* TAB 2: Incoming Events View */}
+            {bottomTab === 'incoming' && (
+              <div className="space-y-3">
+                {incomingEvents.length === 0 ? (
+                  <EmptyState
+                    icon={CalendarIcon}
+                    title={t.calendar.noIncomingEvents || 'ไม่มีกิจกรรมที่จะมาถึงเร็วๆ นี้'}
+                    description="เพิ่มกิจกรรม หรือนัดหมายครอบครัวเพื่อแสดงผลที่นี่"
+                    actionText="เพิ่มกิจกรรมใหม่"
+                    onAction={() => openAddModal(selectedDate)}
+                  />
+                ) : (
+                  <div className="space-y-2.5">
+                    {incomingEvents.map(({ event: evt, instanceDate, daysAway }) => (
+                      <div
+                        key={`${evt.id}-${instanceDate}`}
+                        className="p-4 rounded-2xl bg-card border border-border/80 hover:border-primary/50 shadow-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all group"
+                      >
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                          {/* Image thumbnail */}
+                          {evt.image_url && (
+                            <div
+                              onClick={() => setLightboxImage(evt.image_url || null)}
+                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border border-border shrink-0 cursor-pointer group relative shadow-xs"
+                              title="แตะเพื่อขยายดูรูปภาพเต็ม"
+                            >
+                              <img
+                                src={evt.image_url}
+                                alt={evt.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Maximize2 className="w-4 h-4" />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-1.5 min-w-0 flex-1">
+                            {/* Date Badge & Category */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`text-xs font-extrabold px-2.5 py-0.5 rounded-xl flex items-center gap-1 ${
+                                  daysAway === 0
+                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                    : daysAway === 1
+                                    ? 'bg-primary/15 text-primary'
+                                    : 'bg-muted text-foreground'
+                                }`}
+                              >
+                                <CalendarIcon className="w-3 h-3" />
+                                <span>
+                                  {daysAway === 0
+                                    ? 'วันนี้'
+                                    : daysAway === 1
+                                    ? 'พรุ่งนี้'
+                                    : daysAway === 2
+                                    ? 'มะรืนนี้'
+                                    : `อีก ${daysAway} วัน`}
+                                </span>
+                                <span className="opacity-75 font-normal">
+                                  ({formatThaiDate(instanceDate, { showDayOfWeek: true })})
+                                </span>
+                              </span>
+
+                              <Badge variant="primary" size="sm">
+                                {t.calendar.categories[evt.category] || evt.category}
+                              </Badge>
+
+                              {evt.image_url && (
+                                <span
+                                  onClick={() => setLightboxImage(evt.image_url || null)}
+                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary flex items-center gap-1 cursor-pointer hover:bg-primary/20 transition-colors"
+                                  title="คลิกเพื่อดูรูปภาพ"
+                                >
+                                  <ImageIcon className="w-3 h-3" /> มีรูปแนบ
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Title & Description */}
+                            <h4 className="font-extrabold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors">
+                              {evt.title}
+                            </h4>
+                            {evt.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-2">{evt.description}</p>
+                            )}
+
+                            {/* Time, Location & Attendees */}
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
+                              <span className="flex items-center gap-1 font-semibold text-primary">
+                                <Clock className="w-3.5 h-3.5" />
+                                {evt.all_day ? 'ทั้งวัน' : `${evt.start_time || '09:00'} - ${evt.end_time || '10:00'}`}
+                              </span>
+
+                              {evt.location && (
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(evt.location)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 hover:text-blue-500 hover:underline transition-colors"
+                                  title="เปิดใน Google Maps"
+                                >
+                                  <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                  <span className="font-medium">{evt.location}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              )}
+
+                              {evt.member_ids && evt.member_ids.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <Users className="w-3.5 h-3.5" />
+                                  <div className="flex -space-x-1">
+                                    {evt.member_ids.map((mid) => {
+                                      const m = familyMembers.find((mem) => mem.id === mid);
+                                      return m ? (
+                                        <MemberAvatar
+                                          key={m.id}
+                                          name={m.nickname}
+                                          color={m.member_color}
+                                          size="sm"
+                                        />
+                                      ) : null;
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDate(instanceDate);
+                              setBottomTab('selected');
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-muted/70 hover:bg-muted text-foreground text-xs font-bold transition-all"
+                            title="เลือกดูวันนี้ในปฏิทิน"
+                          >
+                            ดูในปฏิทิน
+                          </button>
+
+                          <a
+                            href={getGoogleCalendarUrl(evt)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex items-center gap-1 text-xs font-semibold"
+                            title="เพิ่มลง Google Calendar"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+
+                          <button
+                            onClick={() => openEditModal(evt)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            title={t.common.edit}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => setDeletingId(evt.id)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            title={t.common.delete}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

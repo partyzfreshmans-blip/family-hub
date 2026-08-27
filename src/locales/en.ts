@@ -99,6 +99,9 @@ export const en: typeof th = {
     description: 'Description',
     recurrence: 'Repeat',
     reminder: 'Reminder',
+    incomingEvents: 'Incoming Events',
+    incomingEventsSubtitle: 'Upcoming events and family schedules',
+    noIncomingEvents: 'No upcoming events soon',
     categories: {
       Family: 'Family',
       School: 'School',

@@ -97,6 +97,9 @@ export const th = {
     description: 'รายละเอียดเพิ่มเติม',
     recurrence: 'ทำซ้ำ',
     reminder: 'แจ้งเตือนล่วงหน้า',
+    incomingEvents: 'กิจกรรมที่จะมาถึง',
+    incomingEventsSubtitle: 'กิจกรรมและนัดหมายเร็วๆ นี้ของครอบครัว',
+    noIncomingEvents: 'ไม่มีกิจกรรมที่จะมาถึงเร็วๆ นี้',
     categories: {
       Family: 'ครอบครัว',
       School: 'โรงเรียน',
