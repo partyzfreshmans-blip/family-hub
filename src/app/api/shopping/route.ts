@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, quantity, unit, category, note } = body;
+    const { name, quantity, unit, category, note, price } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'กรุณาระบุชื่อสินค้า' }, { status: 400 });
@@ -58,12 +58,13 @@ export async function POST(req: NextRequest) {
 
     const itemId = generateId('shp');
     const now = new Date().toISOString();
+    const numPrice = price ? parseFloat(price) : null;
 
     await execute(
       `INSERT INTO shopping_items (
-        id, family_id, name, quantity, unit, category, note,
+        id, family_id, name, quantity, unit, category, note, price,
         added_by, purchased, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       [
         itemId,
         ctx.family.id,
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
         unit?.trim() || null,
         category || 'Grocery',
         note?.trim() || null,
+        numPrice,
         ctx.member.id,
         now,
         now,
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH: Toggle purchased or edit item
+// PATCH: Toggle purchased or edit item (with optional automated expense logging)
 export async function PATCH(req: NextRequest) {
   try {
     const ctx = await getCurrentUserContext();
@@ -94,25 +96,97 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { id, purchased, name, quantity, unit, category, note } = body;
+    const {
+      id,
+      purchased,
+      name,
+      quantity,
+      unit,
+      category,
+      note,
+      price,
+      recordExpense,
+      expensePaidBy,
+      expenseCategory,
+      expenseNote,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Item ID required' }, { status: 400 });
     }
 
-    const existing = await queryOne<ShoppingItem>('SELECT * FROM shopping_items WHERE id = ? AND family_id = ?', [id, ctx.family.id]);
+    const existing = await queryOne<ShoppingItem>(
+      'SELECT * FROM shopping_items WHERE id = ? AND family_id = ?',
+      [id, ctx.family.id]
+    );
     if (!existing) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
     const now = new Date().toISOString();
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
     const newPurchased = purchased !== undefined ? (purchased ? 1 : 0) : existing.purchased;
     const purchasedBy = newPurchased ? (existing.purchased ? existing.purchased_by : ctx.member.id) : null;
     const purchasedAt = newPurchased ? (existing.purchased ? existing.purchased_at : now) : null;
 
+    let finalPrice = price !== undefined ? (price ? parseFloat(price) : null) : existing.price;
+    let finalExpenseId = existing.expense_id;
+
+    // Automated Expense Handling
+    if (newPurchased === 1 && recordExpense && finalPrice && finalPrice > 0) {
+      const targetName = name !== undefined ? name.trim() : existing.name;
+      const targetQty = quantity !== undefined ? quantity : existing.quantity;
+      const targetUnit = unit !== undefined ? unit : (existing.unit || 'ชิ้น');
+      const itemDesc = `ซื้อ ${targetName} (${targetQty} ${targetUnit})`;
+      const payerId = expensePaidBy || ctx.member.id;
+      const expCat = expenseCategory || 'Shopping';
+      const expNote = expenseNote || 'บันทึกอัตโนมัติจากรายการซื้อของ (Shopping)';
+
+      if (!finalExpenseId) {
+        // Create new expense
+        finalExpenseId = generateId('exp');
+        await execute(
+          `INSERT INTO expenses (
+            id, family_id, amount, category, description, paid_by,
+            expense_date, note, created_by, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            finalExpenseId,
+            ctx.family.id,
+            finalPrice,
+            expCat,
+            itemDesc,
+            payerId,
+            today,
+            expNote,
+            ctx.member.id,
+            now,
+            now,
+          ]
+        );
+      } else {
+        // Update existing expense
+        await execute(
+          `UPDATE expenses SET amount = ?, category = ?, description = ?, paid_by = ?, updated_at = ? WHERE id = ? AND family_id = ?`,
+          [finalPrice, expCat, itemDesc, payerId, now, finalExpenseId, ctx.family.id]
+        );
+      }
+    } else if (newPurchased === 0 && existing.expense_id) {
+      // If unmarked, remove linked auto-expense
+      try {
+        await execute('DELETE FROM expenses WHERE id = ? AND family_id = ?', [existing.expense_id, ctx.family.id]);
+      } catch (e) {
+        // ignore if not found
+      }
+      finalExpenseId = null;
+      finalPrice = null;
+    }
+
     await execute(
       `UPDATE shopping_items SET
-        name = ?, quantity = ?, unit = ?, category = ?, note = ?,
+        name = ?, quantity = ?, unit = ?, category = ?, note = ?, price = ?, expense_id = ?,
         purchased = ?, purchased_by = ?, purchased_at = ?, updated_at = ?
        WHERE id = ? AND family_id = ?`,
       [
@@ -121,6 +195,8 @@ export async function PATCH(req: NextRequest) {
         unit !== undefined ? (unit?.trim() || null) : existing.unit,
         category || existing.category,
         note !== undefined ? (note?.trim() || null) : existing.note,
+        finalPrice,
+        finalExpenseId,
         newPurchased,
         purchasedBy,
         purchasedAt,
@@ -130,7 +206,7 @@ export async function PATCH(req: NextRequest) {
       ]
     );
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, expenseId: finalExpenseId });
   } catch (error) {
     console.error('Update shopping error:', error);
     return NextResponse.json({ error: 'Failed to update shopping item' }, { status: 500 });
@@ -150,6 +226,13 @@ export async function DELETE(req: NextRequest) {
 
     if (!itemId) {
       return NextResponse.json({ error: 'Item ID required' }, { status: 400 });
+    }
+
+    const existing = await queryOne<ShoppingItem>('SELECT expense_id FROM shopping_items WHERE id = ? AND family_id = ?', [itemId, ctx.family.id]);
+    if (existing?.expense_id) {
+      try {
+        await execute('DELETE FROM expenses WHERE id = ? AND family_id = ?', [existing.expense_id, ctx.family.id]);
+      } catch (e) {}
     }
 
     await execute('DELETE FROM shopping_items WHERE id = ? AND family_id = ?', [itemId, ctx.family.id]);

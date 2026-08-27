@@ -154,6 +154,8 @@ const DB_SCHEMA = `
     unit TEXT,
     category TEXT NOT NULL DEFAULT 'Grocery',
     note TEXT,
+    price REAL,
+    expense_id TEXT,
     added_by TEXT NOT NULL,
     purchased INTEGER DEFAULT 0,
     purchased_by TEXT,
@@ -421,6 +423,12 @@ async function ensureTursoInitialized() {
         await tursoClient.execute('ALTER TABLE bills ADD COLUMN attachment_name TEXT');
         await tursoClient.execute('ALTER TABLE bills ADD COLUMN attachment_type TEXT');
         await tursoClient.execute('ALTER TABLE bills ADD COLUMN image_url TEXT');
+      } catch (e) {
+        // columns might already exist
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE shopping_items ADD COLUMN price REAL');
+        await tursoClient.execute('ALTER TABLE shopping_items ADD COLUMN expense_id TEXT');
       } catch (e) {
         // columns might already exist
       }

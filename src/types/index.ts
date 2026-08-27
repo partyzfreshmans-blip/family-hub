@@ -98,6 +98,8 @@ export interface ShoppingItem {
   unit?: string | null;
   category: 'Grocery' | 'Household' | 'Pharmacy' | 'Personal' | 'Pets' | 'Other';
   note?: string | null;
+  price?: number | null;
+  expense_id?: string | null;
   added_by: string;
   purchased: number; // 0 or 1
   purchased_by?: string | null;
@@ -106,6 +108,10 @@ export interface ShoppingItem {
   updated_at: string;
   adder?: FamilyMember;
   buyer?: FamilyMember;
+  adder_nick?: string;
+  buyer_nick?: string;
+  adder_color?: string;
+  buyer_color?: string;
 }
 
 export interface Expense {
