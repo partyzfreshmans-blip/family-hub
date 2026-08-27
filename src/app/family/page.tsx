@@ -32,10 +32,12 @@ import {
   Minus,
   ExternalLink,
   ChevronRight,
+  Camera,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { AvatarPicker } from '@/components/ui/AvatarPicker';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -70,6 +72,7 @@ export default function FamilyPage() {
   const [addPin, setAddPin] = useState('123456');
   const [addRole, setAddRole] = useState<Role>('ADULT');
   const [addColor, setAddColor] = useState('#0284c7');
+  const [addAvatarUrl, setAddAvatarUrl] = useState<string | null>(null);
   const [addInitialPoints, setAddInitialPoints] = useState('0');
   const [showAddPin, setShowAddPin] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
@@ -82,6 +85,7 @@ export default function FamilyPage() {
   const [editPin, setEditPin] = useState('');
   const [editRole, setEditRole] = useState<Role>('ADULT');
   const [editColor, setEditColor] = useState('#0284c7');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
   const [showEditPin, setShowEditPin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +183,7 @@ export default function FamilyPage() {
     setAddPin('123456');
     setAddRole('ADULT');
     setAddColor('#0284c7');
+    setAddAvatarUrl(null);
     setAddInitialPoints('0');
     setShowAddPin(false);
     setAddError(null);
@@ -206,6 +211,7 @@ export default function FamilyPage() {
           pin: finalPin,
           role: addRole,
           memberColor: addColor,
+          avatarUrl: addAvatarUrl,
           initialPoints: addInitialPoints,
         }),
       });
@@ -240,6 +246,7 @@ export default function FamilyPage() {
     setEditPin('');
     setEditRole(m.role);
     setEditColor(m.member_color);
+    setEditAvatarUrl(m.avatar_url || null);
     setShowEditPin(false);
     setError(null);
   };
@@ -262,6 +269,7 @@ export default function FamilyPage() {
           pin: editPin.trim() || undefined,
           role: editRole,
           memberColor: editColor,
+          avatarUrl: editAvatarUrl,
         }),
       });
 
@@ -386,7 +394,6 @@ export default function FamilyPage() {
   };
 
   const isAdmin = member?.role === 'ADMIN';
-  const colorOptions = ['#0284c7', '#ec4899', '#10b981', '#8b5cf6', '#f59e0b', '#06b6d4', '#f43f5e', '#64748b'];
 
   // Metrics computation
   const stats = useMemo(() => {
@@ -434,7 +441,7 @@ export default function FamilyPage() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            ศูนย์ควบคุมและจัดการสมาชิก สิทธิ์ และรหัสผ่าน/PIN ของทุกคนในบ้าน {family?.name}
+            ศูนย์ควบคุมและจัดการสมาชิก สิทธิ์ รูปโปรไฟล์ และรหัสผ่าน/PIN ของทุกคนในบ้าน {family?.name}
           </p>
         </div>
 
@@ -588,7 +595,13 @@ export default function FamilyPage() {
                 <div className="flex items-start justify-between gap-3 pt-1">
                   <div className="flex items-start gap-3.5 min-w-0">
                     <div className="relative shrink-0">
-                      <MemberAvatar name={m.nickname} color={m.member_color} size="lg" />
+                      <MemberAvatar
+                        name={m.nickname}
+                        color={m.member_color}
+                        avatarUrl={m.avatar_url}
+                        size="lg"
+                        className="shadow-sm"
+                      />
                       {m.role === 'ADMIN' && (
                         <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
                           <Crown className="w-3 h-3" />
@@ -649,7 +662,7 @@ export default function FamilyPage() {
                       <button
                         onClick={() => openEditModal(m)}
                         className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                        title="แก้ไขรายละเอียด & สิทธิ์"
+                        title="แก้ไขรายละเอียด, สิทธิ์ & รูปโปรไฟล์"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -719,28 +732,39 @@ export default function FamilyPage() {
                     <span>คัดลอกข้อมูลล็อกอิน</span>
                   </button>
 
-                  {isAdmin && (
-                    <div className="flex items-center gap-1.5">
-                      {family?.rewards_enabled === 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => openEditModal(m)}
+                      className="px-2.5 py-1.5 rounded-xl bg-muted/70 hover:bg-muted text-foreground font-bold flex items-center gap-1 transition-colors"
+                      title="เปลี่ยนรูปโปรไฟล์"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-primary" />
+                      <span>รูปโปรไฟล์</span>
+                    </button>
+
+                    {isAdmin && (
+                      <>
+                        {family?.rewards_enabled === 1 && (
+                          <button
+                            onClick={() => openPointsAdjustModal(m)}
+                            className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 transition-colors"
+                            title="ปรับแต้มสะสม"
+                          >
+                            <Award className="w-3.5 h-3.5" />
+                            <span>ปรับแต้ม</span>
+                          </button>
+                        )}
                         <button
-                          onClick={() => openPointsAdjustModal(m)}
-                          className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 transition-colors"
-                          title="ปรับแต้มสะสม"
+                          onClick={() => openQuickPinModal(m)}
+                          className="px-2.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold flex items-center gap-1 transition-colors"
+                          title="เปลี่ยนรหัส PIN"
                         >
-                          <Award className="w-3.5 h-3.5" />
-                          <span>ปรับแต้ม</span>
+                          <Key className="w-3.5 h-3.5" />
+                          <span>เปลี่ยน PIN</span>
                         </button>
-                      )}
-                      <button
-                        onClick={() => openQuickPinModal(m)}
-                        className="px-2.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold flex items-center gap-1 transition-colors"
-                        title="เปลี่ยนรหัส PIN"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                        <span>เปลี่ยน PIN</span>
-                      </button>
-                    </div>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -806,6 +830,19 @@ export default function FamilyPage() {
                   <span>ผู้ดูแล (Admin)</span>
                 </button>
               </div>
+            </div>
+
+            {/* Avatar Picker */}
+            <div className="p-3 rounded-2xl bg-muted/30 border border-border">
+              <label className="block text-xs font-bold mb-2">รูปโปรไฟล์สมาชิก</label>
+              <AvatarPicker
+                currentAvatarUrl={addAvatarUrl}
+                name={addNickname || 'สมาชิกใหม่'}
+                color={addColor}
+                onAvatarChange={setAddAvatarUrl}
+                onColorChange={setAddColor}
+                size="lg"
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -886,35 +923,16 @@ export default function FamilyPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold mb-1">แต้มสะสมเริ่มต้น</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={addInitialPoints}
-                  onChange={(e) => setAddInitialPoints(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold mb-1.5">สีประจำตัว</label>
-                <div className="flex items-center gap-2 pt-1">
-                  {colorOptions.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setAddColor(c)}
-                      style={{ backgroundColor: c }}
-                      className={`w-7 h-7 rounded-full transition-transform ${
-                        addColor === c ? 'ring-4 ring-primary/30 scale-110' : 'hover:scale-105'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">แต้มสะสมเริ่มต้น</label>
+              <input
+                type="number"
+                min="0"
+                placeholder="0"
+                value={addInitialPoints}
+                onChange={(e) => setAddInitialPoints(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
             </div>
 
             {/* Submit Action Buttons */}
@@ -964,7 +982,7 @@ export default function FamilyPage() {
         <Modal
           isOpen={!!editingMember}
           onClose={() => setEditingMember(null)}
-          title={`แก้ไขข้อมูลและสิทธิ์: ${editingMember.nickname}`}
+          title={`แก้ไขข้อมูลและโปรไฟล์: ${editingMember.nickname}`}
           maxWidth="md"
         >
           <form onSubmit={handleSaveMember} className="space-y-4">
@@ -973,6 +991,19 @@ export default function FamilyPage() {
                 {error}
               </div>
             )}
+
+            {/* Avatar Picker for Member */}
+            <div className="p-3 rounded-2xl bg-muted/30 border border-border">
+              <label className="block text-xs font-bold mb-2">รูปโปรไฟล์สมาชิก</label>
+              <AvatarPicker
+                currentAvatarUrl={editAvatarUrl}
+                name={editNickname || editingMember.nickname}
+                color={editColor}
+                onAvatarChange={setEditAvatarUrl}
+                onColorChange={setEditColor}
+                size="lg"
+              />
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -1062,23 +1093,6 @@ export default function FamilyPage() {
                 </p>
               </div>
             )}
-
-            <div>
-              <label className="block text-xs font-bold mb-1.5">{t.family.memberColor}</label>
-              <div className="flex items-center gap-2">
-                {colorOptions.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setEditColor(c)}
-                    style={{ backgroundColor: c }}
-                    className={`w-8 h-8 rounded-full transition-transform ${
-                      editColor === c ? 'ring-4 ring-primary/30 scale-110' : 'hover:scale-105'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
               <button

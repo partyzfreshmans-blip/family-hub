@@ -161,7 +161,12 @@ export function AppShell({ children }: AppShellProps) {
           {member && (
             <div className="flex items-center justify-between p-2 rounded-2xl bg-muted/40">
               <div className="flex items-center gap-2.5 min-w-0">
-                <MemberAvatar name={member.nickname} color={member.member_color} size="sm" />
+                <MemberAvatar
+                  name={member.nickname}
+                  color={member.member_color}
+                  avatarUrl={user?.avatar_url}
+                  size="sm"
+                />
                 <div className="min-w-0">
                   <p className="text-xs font-bold truncate leading-tight">{member.nickname}</p>
                   <p className="text-[10px] text-muted-foreground">{member.role}</p>

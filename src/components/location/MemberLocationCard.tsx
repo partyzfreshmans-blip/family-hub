@@ -5,6 +5,7 @@ import { MemberCurrentLocation } from '@/types';
 import { useLanguage } from '@/components/LanguageContext';
 import { Navigation, MapPin, Send, Eye, ShieldAlert } from 'lucide-react';
 import { formatLocationTimeThai, formatAccuracyThai, getDirectionsUrl } from '@/lib/geo';
+import { MemberAvatar } from '@/components/ui/MemberAvatar';
 
 interface MemberLocationCardProps {
   memberLocation: MemberCurrentLocation;
@@ -45,12 +46,12 @@ export default function MemberLocationCard({
         {/* Member Avatar & Basic Info */}
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div
-              style={{ backgroundColor: color }}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-extrabold text-base shadow-sm"
-            >
-              {nickname.substring(0, 2)}
-            </div>
+            <MemberAvatar
+              name={nickname}
+              color={color}
+              avatarUrl={mem?.avatar_url}
+              size="lg"
+            />
             {isSosActive ? (
               <span className="absolute -top-1 -right-1 flex h-4 w-4">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>

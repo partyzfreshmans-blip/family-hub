@@ -24,10 +24,32 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { Badge } from '@/components/ui/Badge';
 
+import { AvatarPicker } from '@/components/ui/AvatarPicker';
+
 export default function SettingsPage() {
   const { t, lang, setLang } = useLanguage();
   const { theme, setTheme } = useTheme();
   const { user, family, member, logout, refreshUser } = useAuth();
+
+  // Profile Settings Form
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(user?.avatar_url || null);
+  const [userDisplayName, setUserDisplayName] = useState(user?.display_name || '');
+  const [userNickname, setUserNickname] = useState(member?.nickname || '');
+  const [userColor, setUserColor] = useState(member?.member_color || '#0284c7');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
+
+  // Sync state when user/member changes
+  React.useEffect(() => {
+    if (user) {
+      setUserAvatarUrl(user.avatar_url || null);
+      setUserDisplayName(user.display_name || '');
+    }
+    if (member) {
+      setUserNickname(member.nickname || '');
+      setUserColor(member.member_color || '#0284c7');
+    }
+  }, [user, member]);
 
   // Family Settings Form (Admin Only)
   const [familyName, setFamilyName] = useState(family?.name || '');
@@ -40,6 +62,35 @@ export default function SettingsPage() {
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   const isAdmin = member?.role === 'ADMIN';
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    setProfileSaveSuccess(false);
+
+    try {
+      const res = await fetch('/api/users/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          avatarUrl: userAvatarUrl,
+          displayName: userDisplayName.trim(),
+          nickname: userNickname.trim(),
+          memberColor: userColor,
+        }),
+      });
+
+      if (res.ok) {
+        setProfileSaveSuccess(true);
+        await refreshUser();
+        setTimeout(() => setProfileSaveSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const handleSaveFamilySettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,26 +128,73 @@ export default function SettingsPage() {
         <p className="text-xs text-muted-foreground">จัดการข้อมูลบัญชีผู้ใช้และการตั้งค่าของครอบครัว</p>
       </div>
 
-      {/* 1. My Account Section */}
-      <div className="bg-card text-card-foreground rounded-3xl p-6 border border-border shadow-soft space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-border/60">
-          <User className="w-5 h-5 text-primary" />
-          <h2 className="font-bold text-base">{t.settings.myAccount}</h2>
+      {/* 1. My Account & Profile Picture Section */}
+      <div className="bg-card text-card-foreground rounded-3xl p-6 border border-border shadow-soft space-y-5">
+        <div className="flex items-center justify-between pb-2 border-b border-border/60">
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-primary" />
+            <h2 className="font-bold text-base">{t.settings.myAccount} & รูปโปรไฟล์</h2>
+          </div>
+          {profileSaveSuccess && (
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> บันทึกโปรไฟล์สำเร็จ
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-4">
-          <MemberAvatar name={member?.nickname || user?.display_name || '?'} color={member?.member_color} size="lg" />
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          {/* Avatar Picker */}
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-base">{member?.nickname}</h3>
-              <Badge variant="primary" size="sm">
-                <Shield className="w-3 h-3" />
-                <span>{member?.role}</span>
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{user?.display_name} ({user?.email})</p>
+            <label className="block text-xs font-bold mb-2">รูปโปรไฟล์ของคุณ</label>
+            <AvatarPicker
+              currentAvatarUrl={userAvatarUrl}
+              name={userNickname || userDisplayName || user?.display_name || '?'}
+              color={userColor}
+              onAvatarChange={setUserAvatarUrl}
+              onColorChange={setUserColor}
+              size="xl"
+            />
           </div>
-        </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div>
+              <label className="block text-xs font-bold mb-1.5">ชื่อเรียกในบ้าน (Nickname)</label>
+              <input
+                type="text"
+                required
+                value={userNickname}
+                onChange={(e) => setUserNickname(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1.5">ชื่อ-นามสกุลจริง</label>
+              <input
+                type="text"
+                required
+                value={userDisplayName}
+                onChange={(e) => setUserDisplayName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground">
+              อีเมล: <span className="font-mono font-bold text-foreground">{user?.email}</span> (บทบาท: {member?.role})
+            </p>
+
+            <button
+              type="submit"
+              disabled={isSavingProfile}
+              className="px-5 py-2.5 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSavingProfile ? t.common.saving : 'บันทึกโปรไฟล์'}</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* 2. Family Workspace Settings (Admin Only) */}

@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only Family Admin can add members directly' }, { status: 403 });
     }
 
-    const { nickname, displayName, email, pin, password, role, memberColor, initialPoints } = await req.json();
+    const { nickname, displayName, email, pin, password, role, memberColor, initialPoints, avatarUrl } = await req.json();
 
     if (!nickname || !nickname.trim()) {
       return NextResponse.json({ error: 'กรุณากรอกชื่อเรียกของสมาชิก' }, { status: 400 });
@@ -85,13 +85,16 @@ export async function POST(req: NextRequest) {
       if (existingMember) {
         return NextResponse.json({ error: 'สมาชิกท่านนี้อยู่ในครอบครัวนี้อยู่แล้ว' }, { status: 400 });
       }
+      if (avatarUrl !== undefined) {
+        await execute('UPDATE users SET avatar_url = ?, updated_at = ? WHERE id = ?', [avatarUrl, now, userId]);
+      }
     } else {
       userId = generateId('usr');
       const passwordHash = await hashPassword(passOrPin);
       await execute(
-        `INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [userId, cleanEmail, passwordHash, cleanDisplay, now, now]
+        `INSERT INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [userId, cleanEmail, passwordHash, cleanDisplay, avatarUrl || null, now, now]
       );
     }
 
@@ -133,6 +136,7 @@ export async function PATCH(req: NextRequest) {
       pointsDelta,
       pointsBalance,
       pointsReason,
+      avatarUrl,
     } = await req.json();
 
     if (!memberId) {
@@ -212,18 +216,19 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Update User details (display_name, email, password/PIN if provided)
+    // Update User details (display_name, email, avatar_url, password/PIN if provided)
     const passOrPin = pin || password;
 
-    if (displayName || email || passOrPin) {
-      const user = await queryOne<{ id: string; email: string; display_name: string }>(
-        'SELECT id, email, display_name FROM users WHERE id = ?',
+    if (displayName !== undefined || email !== undefined || passOrPin || avatarUrl !== undefined) {
+      const user = await queryOne<{ id: string; email: string; display_name: string; avatar_url: string | null }>(
+        'SELECT id, email, display_name, avatar_url FROM users WHERE id = ?',
         [targetMember.user_id]
       );
 
       if (user) {
-        const newDisplayName = displayName ? displayName.trim() : user.display_name;
-        const newEmail = email ? email.trim().toLowerCase() : user.email;
+        const newDisplayName = displayName !== undefined ? displayName.trim() : user.display_name;
+        const newEmail = email !== undefined ? email.trim().toLowerCase() : user.email;
+        const newAvatar = avatarUrl !== undefined ? avatarUrl : user.avatar_url;
 
         if (passOrPin && passOrPin.trim()) {
           if (passOrPin.trim().length < 4) {
@@ -231,13 +236,13 @@ export async function PATCH(req: NextRequest) {
           }
           const passwordHash = await hashPassword(passOrPin.trim());
           await execute(
-            'UPDATE users SET display_name = ?, email = ?, password_hash = ?, updated_at = ? WHERE id = ?',
-            [newDisplayName, newEmail, passwordHash, now, user.id]
+            'UPDATE users SET display_name = ?, email = ?, avatar_url = ?, password_hash = ?, updated_at = ? WHERE id = ?',
+            [newDisplayName, newEmail, newAvatar, passwordHash, now, user.id]
           );
         } else {
           await execute(
-            'UPDATE users SET display_name = ?, email = ?, updated_at = ? WHERE id = ?',
-            [newDisplayName, newEmail, now, user.id]
+            'UPDATE users SET display_name = ?, email = ?, avatar_url = ?, updated_at = ? WHERE id = ?',
+            [newDisplayName, newEmail, newAvatar, now, user.id]
           );
         }
       }

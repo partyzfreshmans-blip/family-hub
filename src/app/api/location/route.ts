@@ -20,7 +20,11 @@ export async function GET(request: NextRequest) {
 
     // 1. Fetch all family members
     const members = await query<FamilyMember>(
-      `SELECT * FROM family_members WHERE family_id = ? ORDER BY joined_at ASC`,
+      `SELECT m.*, u.display_name, u.email, u.avatar_url 
+       FROM family_members m 
+       JOIN users u ON m.user_id = u.id 
+       WHERE m.family_id = ? 
+       ORDER BY m.joined_at ASC`,
       [familyId]
     );
 
