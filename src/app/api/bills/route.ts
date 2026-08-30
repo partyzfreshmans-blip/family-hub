@@ -162,20 +162,49 @@ export async function PATCH(req: Request) {
       const paymentAmount = amount ? parseFloat(amount) : bill.amount;
       const paymentDate = paidDate || new Date().toISOString().split('T')[0];
       const payer = paidBy || ctx.member.id;
+      const finalPayAttachmentUrl = attachmentUrl || body.attachment_url || imageUrl || body.image_url || null;
+      const finalPayAttachmentName = attachmentName || body.attachment_name || null;
+      const finalPayAttachmentType = attachmentType || body.attachment_type || null;
 
       await transaction(async () => {
-        // 1. Insert payment record
+        // 1. Insert payment record with payment slip
         await execute(
-          `INSERT INTO bill_payments (id, bill_id, family_id, amount, paid_date, paid_by, note, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [generateId('pay'), bill.id, ctx.family.id, paymentAmount, paymentDate, payer, note || 'ชำระตามกำหนด', now]
+          `INSERT INTO bill_payments (id, bill_id, family_id, amount, paid_date, paid_by, note, attachment_url, attachment_name, attachment_type, image_url, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            generateId('pay'),
+            bill.id,
+            ctx.family.id,
+            paymentAmount,
+            paymentDate,
+            payer,
+            note || 'ชำระตามกำหนด',
+            finalPayAttachmentUrl,
+            finalPayAttachmentName,
+            finalPayAttachmentType,
+            finalPayAttachmentUrl,
+            now,
+          ]
         );
 
-        // 2. Optionally record as expense if wanted
+        // 2. Record as expense with receipt slip
         await execute(
-          `INSERT INTO expenses (id, family_id, amount, category, description, paid_by, expense_date, note, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [generateId('exp'), ctx.family.id, paymentAmount, bill.category, `ชำระบิล: ${bill.name}`, payer, paymentDate, note || '', ctx.member.id, now, now]
+          `INSERT INTO expenses (id, family_id, amount, category, description, paid_by, expense_date, note, image_url, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            generateId('exp'),
+            ctx.family.id,
+            paymentAmount,
+            bill.category,
+            `ชำระบิล: ${bill.name}`,
+            payer,
+            paymentDate,
+            note || '',
+            finalPayAttachmentUrl,
+            ctx.member.id,
+            now,
+            now,
+          ]
         );
 
         // 3. Update bill status & advance due date if recurring

@@ -104,6 +104,10 @@ export default function BillsPage() {
   const [payDate, setPayDate] = useState(today);
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
+  const [payAttachmentUrl, setPayAttachmentUrl] = useState<string | null>(null);
+  const [payAttachmentName, setPayAttachmentName] = useState<string | null>(null);
+  const [payAttachmentType, setPayAttachmentType] = useState<string | null>(null);
+  const [isUploadingPayFile, setIsUploadingPayFile] = useState(false);
 
   const fetchBills = useCallback(async () => {
     try {
@@ -200,12 +204,56 @@ export default function BillsPage() {
     }
   };
 
+  const handlePayFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
+      return;
+    }
+
+    setIsUploadingPayFile(true);
+    try {
+      if (file.type.startsWith('image/')) {
+        const compressed = await compressImage(file, 1280, 0.82);
+        setPayAttachmentUrl(compressed);
+        setPayAttachmentName(file.name);
+        setPayAttachmentType('image');
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setPayAttachmentUrl(reader.result as string);
+          setPayAttachmentName(file.name);
+          setPayAttachmentType(file.type || 'application/pdf');
+          setIsUploadingPayFile(false);
+        };
+        reader.onerror = () => {
+          alert('ไม่สามารถอ่านไฟล์ได้');
+          setIsUploadingPayFile(false);
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    } catch (err) {
+      console.error('Payment file process error:', err);
+      alert('เกิดข้อผิดพลาดในการประมวลผลสลิป');
+    } finally {
+      setIsUploadingPayFile(false);
+      e.target.value = '';
+    }
+  };
+
   const openPayModal = (b: Bill) => {
     setPayingBill(b);
     setPayAmount(String(b.amount));
     setPaidBy(member?.id || '');
     setPayDate(today);
     setPayNote('ชำระบิลตามกำหนด');
+    setPayAttachmentUrl(null);
+    setPayAttachmentName(null);
+    setPayAttachmentType(null);
+    setIsUploadingPayFile(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -263,6 +311,10 @@ export default function BillsPage() {
           paidDate: payDate,
           paidBy,
           note: payNote,
+          attachmentUrl: payAttachmentUrl,
+          attachmentName: payAttachmentName,
+          attachmentType: payAttachmentType,
+          imageUrl: payAttachmentUrl,
         }),
       });
 
@@ -460,24 +512,84 @@ export default function BillsPage() {
               </h2>
 
               <div className="space-y-2">
-                {payments.map((p: any) => (
-                  <div
-                    key={p.id}
-                    className="p-3.5 rounded-2xl bg-muted/40 border border-border/40 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="font-bold text-foreground truncate">{p.note || 'ชำระค่าบริการ'}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatThaiDate(p.paid_date, { shortMonth: true })}
-                        {p.payer_nick && ` • จ่ายโดย ${p.payer_nick}`}
-                      </p>
-                    </div>
+                {payments.map((p: any) => {
+                  const slipUrl = p.attachment_url || p.image_url;
+                  const isImageSlip = slipUrl ? (!p.attachment_type || p.attachment_type.startsWith('image/') || p.attachment_type === 'image' || slipUrl.startsWith('data:image/')) : false;
 
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(p.amount)}
-                    </span>
-                  </div>
-                ))}
+                  return (
+                    <div
+                      key={p.id}
+                      className="p-3.5 rounded-2xl bg-card border border-border/70 hover:border-primary/40 flex items-center justify-between gap-3 text-xs shadow-2xs transition-all group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {slipUrl ? (
+                          <div
+                            onClick={() =>
+                              setLightboxMedia({
+                                url: slipUrl,
+                                title: `สลิปการจ่าย: ${p.note || 'ชำระบิล'} (${formatCurrency(p.amount)})`,
+                                isImage: isImageSlip,
+                              })
+                            }
+                            className="w-11 h-11 rounded-xl overflow-hidden bg-muted border border-border shrink-0 cursor-pointer relative group/thumb shadow-xs"
+                            title="แตะเพื่อดูสลิปหลักฐานการจ่าย"
+                          >
+                            {isImageSlip ? (
+                              <img
+                                src={slipUrl}
+                                alt="Slip"
+                                className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-primary bg-primary/10">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity text-white">
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-5 h-5" />
+                          </div>
+                        )}
+
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="font-extrabold text-foreground truncate">{p.note || 'ชำระค่าบริการ'}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {formatThaiDate(p.paid_date, { shortMonth: true })}
+                            {p.payer_nick && ` • จ่ายโดย ${p.payer_nick}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(p.amount)}
+                        </span>
+
+                        {slipUrl && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLightboxMedia({
+                                url: slipUrl,
+                                title: `สลิปการจ่าย: ${p.note || 'ชำระบิล'} (${formatCurrency(p.amount)})`,
+                                isImage: isImageSlip,
+                              })
+                            }
+                            className="px-2.5 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1 shadow-2xs"
+                            title="ดูหลักฐานการจ่าย"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline text-[11px]">ดูสลิป</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -761,6 +873,107 @@ export default function BillsPage() {
                 onChange={(e) => setPayNote(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+            </div>
+
+            {/* Payment Proof / Slip Attachment Section */}
+            <div>
+              <label className="block text-xs font-bold mb-1.5 flex items-center justify-between">
+                <span>แนบหลักฐานการโอน / สลิปการจ่ายเงิน (Payment Slip)</span>
+                {payAttachmentUrl && (
+                  <span className="text-[11px] text-emerald-500 font-bold">แนบสลิปแล้ว ✓</span>
+                )}
+              </label>
+
+              {payAttachmentUrl ? (
+                <div className="p-3 rounded-2xl bg-muted/40 border border-border flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {payAttachmentType === 'image' || (!payAttachmentType && payAttachmentUrl.startsWith('data:image/')) ? (
+                      <img
+                        src={payAttachmentUrl}
+                        alt="Payment Slip Preview"
+                        className="w-12 h-12 rounded-xl object-cover border border-border shrink-0 cursor-pointer"
+                        onClick={() =>
+                          setLightboxMedia({
+                            url: payAttachmentUrl,
+                            title: `สลิปการจ่าย: ${payingBill.name}`,
+                            isImage: true,
+                          })
+                        }
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                        <FileText className="w-6 h-6 text-emerald-500" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">
+                        {payAttachmentName || 'สลิปการโอนเงิน'}
+                      </p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                        พร้อมบันทึกเป็นหลักฐาน
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLightboxMedia({
+                          url: payAttachmentUrl,
+                          title: `สลิปการจ่าย: ${payingBill.name}`,
+                          isImage: true,
+                        })
+                      }
+                      className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title="ดูสลิปแบบขยายใหญ่"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayAttachmentUrl(null);
+                        setPayAttachmentName(null);
+                        setPayAttachmentType(null);
+                      }}
+                      className="p-2 rounded-xl bg-background border border-border hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 transition-colors"
+                      title="ลบสลิป"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-border hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-2xl p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all group">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handlePayFileSelect}
+                    className="hidden"
+                  />
+                  {isUploadingPayFile ? (
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 font-bold">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังประมวลผลสลิป...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-8 h-8 rounded-xl bg-muted group-hover:bg-emerald-500/10 flex items-center justify-center transition-colors">
+                        <Upload className="w-4 h-4 text-muted-foreground group-hover:text-emerald-600 transition-colors" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-foreground group-hover:text-emerald-600 transition-colors">
+                          แตะเพื่อแนบสลิปการโอน หรือ ถ่ายรูปใบเสร็จ
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          รูปภาพสลิปจากแอปธนาคาร หรือไฟล์ PDF (ไม่เกิน 5MB)
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </label>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">

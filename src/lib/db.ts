@@ -213,6 +213,10 @@ const DB_SCHEMA = `
     paid_date TEXT NOT NULL,
     paid_by TEXT NOT NULL,
     note TEXT,
+    attachment_url TEXT,
+    attachment_name TEXT,
+    attachment_type TEXT,
+    image_url TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
     FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
@@ -458,6 +462,14 @@ async function ensureTursoInitialized() {
       } catch (e) {
         // columns might already exist
       }
+      try {
+        await tursoClient.execute('ALTER TABLE bill_payments ADD COLUMN attachment_url TEXT');
+        await tursoClient.execute('ALTER TABLE bill_payments ADD COLUMN attachment_name TEXT');
+        await tursoClient.execute('ALTER TABLE bill_payments ADD COLUMN attachment_type TEXT');
+        await tursoClient.execute('ALTER TABLE bill_payments ADD COLUMN image_url TEXT');
+      } catch (e) {
+        // columns might already exist
+      }
       
       const checkRes = await tursoClient.execute('SELECT count(*) as count FROM families');
       const count = (checkRes.rows[0]?.count as number) || 0;
@@ -571,6 +583,14 @@ export async function getDb(): Promise<Database> {
         dbInstance.run('ALTER TABLE bills ADD COLUMN attachment_name TEXT;');
         dbInstance.run('ALTER TABLE bills ADD COLUMN attachment_type TEXT;');
         dbInstance.run('ALTER TABLE bills ADD COLUMN image_url TEXT;');
+      } catch (e) {
+        // columns might already exist
+      }
+      try {
+        dbInstance.run('ALTER TABLE bill_payments ADD COLUMN attachment_url TEXT;');
+        dbInstance.run('ALTER TABLE bill_payments ADD COLUMN attachment_name TEXT;');
+        dbInstance.run('ALTER TABLE bill_payments ADD COLUMN attachment_type TEXT;');
+        dbInstance.run('ALTER TABLE bill_payments ADD COLUMN image_url TEXT;');
       } catch (e) {
         // columns might already exist
       }

@@ -159,8 +159,13 @@ export interface BillPayment {
   paid_date: string;
   paid_by: string;
   note?: string | null;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: string | null;
+  image_url?: string | null;
   created_at: string;
   payer?: FamilyMember;
+  payer_nick?: string;
 }
 
 export interface Reward {
