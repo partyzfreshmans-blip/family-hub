@@ -181,7 +181,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE: Delete expense
+// DELETE: Delete expense (and cascade delete linked bill payment)
 export async function DELETE(req: NextRequest) {
   try {
     const ctx = await getCurrentUserContext();
@@ -200,7 +200,41 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Expense ID required' }, { status: 400 });
     }
 
+    const expense = await queryOne<Expense>(
+      'SELECT * FROM expenses WHERE id = ? AND family_id = ?',
+      [expenseId, ctx.family.id]
+    );
+
+    if (!expense) {
+      return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
+    }
+
+    // Check if expense is a bill payment: requires ADMIN role
+    const isBillPayment = expense.description?.startsWith('ชำระบิล:') || expense.note?.includes('ชำระ');
+    if (isBillPayment && ctx.member.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'เฉพาะแอดมินเท่านั้นที่มีสิทธิ์ลบรายการชำระบิล' }, { status: 403 });
+    }
+
+    // 1. Delete the expense
     await execute('DELETE FROM expenses WHERE id = ? AND family_id = ?', [expenseId, ctx.family.id]);
+
+    // 2. Cascade delete from bill_payments so it also disappears from bills history
+    if (isBillPayment || expense.description?.includes('ชำระบิล')) {
+      const billName = expense.description.replace(/^ชำระบิล:\s*/, '').trim();
+      await execute(
+        `DELETE FROM bill_payments 
+         WHERE family_id = ? 
+           AND amount = ? 
+           AND paid_date = ? 
+           AND (
+             bill_id IN (SELECT id FROM bills WHERE family_id = ? AND name LIKE ?)
+             OR note LIKE ?
+             OR note = 'ชำระตามกำหนด'
+           )`,
+        [ctx.family.id, expense.amount, expense.expense_date, ctx.family.id, `%${billName}%`, `%${billName}%`]
+      );
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete expense' }, { status: 500 });

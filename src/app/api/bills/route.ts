@@ -260,7 +260,7 @@ export async function PATCH(req: Request) {
   }
 }
 
-// DELETE bill
+// DELETE bill or bill payment record (Admin only)
 export async function DELETE(req: NextRequest) {
   try {
     const ctx = await getCurrentUserContext();
@@ -269,19 +269,41 @@ export async function DELETE(req: NextRequest) {
     }
 
     if (ctx.member.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Only Admin can delete bills' }, { status: 403 });
+      return NextResponse.json({ error: 'เฉพาะแอดมินเท่านั้นที่มีสิทธิ์ลบข้อมูลบิลหรือประวัติการชำระเงิน' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
     const billId = searchParams.get('id');
+    const paymentId = searchParams.get('paymentId');
+
+    if (paymentId) {
+      const payment = await queryOne<BillPayment>(
+        'SELECT * FROM bill_payments WHERE id = ? AND family_id = ?',
+        [paymentId, ctx.family.id]
+      );
+      if (!payment) {
+        return NextResponse.json({ error: 'Payment record not found' }, { status: 404 });
+      }
+
+      // Delete payment history record
+      await execute('DELETE FROM bill_payments WHERE id = ? AND family_id = ?', [paymentId, ctx.family.id]);
+
+      // Also clean up any associated expense if exists
+      await execute(
+        'DELETE FROM expenses WHERE family_id = ? AND amount = ? AND expense_date = ? AND description LIKE ?',
+        [ctx.family.id, payment.amount, payment.paid_date, '%ชำระบิล%']
+      );
+
+      return NextResponse.json({ success: true, deletedPaymentId: paymentId });
+    }
 
     if (!billId) {
-      return NextResponse.json({ error: 'Bill ID required' }, { status: 400 });
+      return NextResponse.json({ error: 'Bill ID or Payment ID required' }, { status: 400 });
     }
 
     await execute('DELETE FROM bills WHERE id = ? AND family_id = ?', [billId, ctx.family.id]);
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete bill' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
   }
 }

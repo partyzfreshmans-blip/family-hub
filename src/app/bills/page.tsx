@@ -82,6 +82,7 @@ export default function BillsPage() {
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [lightboxMedia, setLightboxMedia] = useState<{ url: string; title: string; isImage: boolean } | null>(null);
 
   // Form State
@@ -342,6 +343,22 @@ export default function BillsPage() {
     }
   };
 
+  const handleDeletePayment = async () => {
+    if (!deletingPaymentId) return;
+    try {
+      const res = await fetch(`/api/bills?paymentId=${deletingPaymentId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDeletingPaymentId(null);
+        fetchBills();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'ไม่สามารถลบประวัติการชำระเงินได้');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const isChild = member?.role === 'CHILD';
   if (isChild) {
     return (
@@ -564,7 +581,7 @@ export default function BillsPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">
                           {formatCurrency(p.amount)}
                         </span>
@@ -584,6 +601,17 @@ export default function BillsPage() {
                           >
                             <ImageIcon className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline text-[11px]">ดูสลิป</span>
+                          </button>
+                        )}
+
+                        {member?.role === 'ADMIN' && (
+                          <button
+                            type="button"
+                            onClick={() => setDeletingPaymentId(p.id)}
+                            className="p-1.5 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            title="ลบประวัติการชำระเงิน (เฉพาะแอดมิน)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
@@ -1033,6 +1061,15 @@ export default function BillsPage() {
         isOpen={!!deletingId}
         onClose={() => setDeletingId(null)}
         onConfirm={handleDelete}
+      />
+
+      {/* Delete Payment History Confirmation (Admin Only) */}
+      <ConfirmDialog
+        isOpen={!!deletingPaymentId}
+        onClose={() => setDeletingPaymentId(null)}
+        onConfirm={handleDeletePayment}
+        title="ลบประวัติการชำระเงิน"
+        message="คุณต้องการลบรายการชำระเงินนี้ใช่หรือไม่? รายการนี้จะถูกลบออกจากประวัติบิลอย่างถาวร (สิทธิ์เฉพาะแอดมิน)"
       />
     </div>
   );

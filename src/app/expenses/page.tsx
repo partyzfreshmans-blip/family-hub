@@ -257,6 +257,9 @@ export default function ExpensesPage() {
       if (res.ok) {
         setDeletingId(null);
         fetchExpenses();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'ไม่สามารถลบรายการได้');
       }
     } catch (err) {
       console.error(err);
