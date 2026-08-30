@@ -39,6 +39,11 @@ import {
   Layers,
   ArrowUpDown,
   Tag,
+  Building,
+  Key,
+  FolderCheck,
+  ChevronRight,
+  HelpCircle,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -49,54 +54,118 @@ import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FamilyDocument, DocumentCategory, DocumentPrivacyLevel, FamilyMember } from '@/types';
 
-const CATEGORY_INFO: Record<
-  DocumentCategory,
-  { label: string; icon: any; color: string; bg: string; border: string; glow: string; presets: string[] }
-> = {
+interface CategoryConfig {
+  label: string;
+  subLabel: string;
+  icon: any;
+  color: string;
+  bg: string;
+  border: string;
+  glow: string;
+  assetTypeLabel: string;
+  assetPlaceholder: string;
+  defaultAssetPresets: string[];
+  docTypePresets: { title: string; docNumberHint?: string; icon?: string }[];
+}
+
+const CATEGORY_INFO: Record<DocumentCategory, CategoryConfig> = {
   HOUSE: {
     label: 'บ้าน & ที่อยู่อาศัย',
+    subLabel: 'ที่อยู่อาศัย & อสังหาฯ',
     icon: Home,
     color: 'text-amber-500',
     bg: 'bg-amber-500/10 dark:bg-amber-500/15',
     border: 'border-amber-500/30',
     glow: 'hover:border-amber-500/60 hover:shadow-amber-500/10',
-    presets: ['สำเนาทะเบียนบ้าน', 'โฉนดที่ดิน', 'สัญญาซื้อขาย/เช่า', 'ประกันอัคคีภัย', 'ใบรับประกันเครื่องใช้'],
+    assetTypeLabel: 'บ้าน / อสังหาริมทรัพย์',
+    assetPlaceholder: 'เช่น บ้านสุขใจ (บ้านหลัก), คอนโดสุขุมวิท, บ้านสวนเชียงใหม่',
+    defaultAssetPresets: ['บ้านหลัก (สุขใจ)', 'คอนโดสุขุมวิท', 'บ้านพักต่างจังหวัด', 'ที่ดินเปล่า'],
+    docTypePresets: [
+      { title: 'สำเนาทะเบียนบ้าน', docNumberHint: 'เลขรหัสประจำบ้าน 11 หลัก' },
+      { title: 'โฉนดที่ดิน (น.ส. 4 จ)', docNumberHint: 'เลขที่โฉนด / ระวาง' },
+      { title: 'สัญญาซื้อขาย / สัญญาเช่า', docNumberHint: 'เลขที่สัญญา' },
+      { title: 'ประกันอัคคีภัย / ประกันบ้าน', docNumberHint: 'เลขที่กรมธรรม์' },
+      { title: 'ใบเสร็จค่าส่วนกลาง / ค่าบำรุง', docNumberHint: 'เลขที่ใบเสร็จ' },
+      { title: 'ใบรับประกันเครื่องใช้ / อุปกรณ์บ้าน', docNumberHint: 'Serial Number' },
+    ],
   },
   VEHICLE: {
     label: 'รถยนต์ & ยานพาหนะ',
+    subLabel: 'รถยนต์ & มอเตอร์ไซค์',
     icon: Car,
     color: 'text-blue-500',
     bg: 'bg-blue-500/10 dark:bg-blue-500/15',
     border: 'border-blue-500/30',
     glow: 'hover:border-blue-500/60 hover:shadow-blue-500/10',
-    presets: ['เล่มทะเบียนรถ (เล่มฟ้า/เขียว)', 'พ.ร.บ. / ป้ายภาษีรถยนต์', 'ประกันภัยรถยนต์ (ชั้น 1/2/3)', 'ใบขับขี่', 'สมุดเช็คระยะ'],
+    assetTypeLabel: 'คันรถ / ยานพาหนะ / ทะเบียน',
+    assetPlaceholder: 'เช่น Honda Civic (2ขค-8888), Toyota Fortuner (1กข-9999), Vespa 150',
+    defaultAssetPresets: ['Toyota Fortuner (1กข-9999)', 'Honda Civic (2ขค-8888)', 'มอเตอร์ไซค์ Vespa', 'รถยนต์สำรอง'],
+    docTypePresets: [
+      { title: 'พ.ร.บ. / ป้ายภาษีรถยนต์', docNumberHint: 'เลขที่ พ.ร.บ. / เลขทะเบียน' },
+      { title: 'ประกันภัยรถยนต์ (ชั้น 1/2/3)', docNumberHint: 'เลขที่กรมธรรม์' },
+      { title: 'เล่มทะเบียนรถ (เล่มฟ้า/เขียว)', docNumberHint: 'เลขตัวถัง / เลขทะเบียน' },
+      { title: 'ใบขับขี่', docNumberHint: 'เลขที่ใบอนุญาตขับรถ' },
+      { title: 'สมุดเช็คระยะ / ประวัติซ่อมบำรุง', docNumberHint: 'ระยะทาง (กม.)' },
+      { title: 'สัญญาเช่าซื้อ / ไฟแนนซ์', docNumberHint: 'เลขที่สัญญาเช่าซื้อ' },
+    ],
   },
   PERSONAL: {
     label: 'เอกสารส่วนตัว & สมาชิก',
+    subLabel: 'สมาชิกในครอบครัว',
     icon: User,
     color: 'text-emerald-500',
     bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
     border: 'border-emerald-500/30',
     glow: 'hover:border-emerald-500/60 hover:shadow-emerald-500/10',
-    presets: ['บัตรประชาชน', 'สูติบัตร', 'หนังสือเดินทาง (Passport)', 'ทะเบียนสมรส', 'ประกันสุขภาพ/ชีวิต', 'วุฒิการศึกษา', 'ประวัติฉีดวัคซีน'],
+    assetTypeLabel: 'สมาชิกเจ้าของเอกสาร',
+    assetPlaceholder: 'เช่น พ่อ, แม่, น้องต้น, น้องเมย์',
+    defaultAssetPresets: ['พ่อ (สมศักดิ์)', 'แม่ (สุดา)', 'น้องต้น', 'น้องเมย์'],
+    docTypePresets: [
+      { title: 'บัตรประจำตัวประชาชน', docNumberHint: 'เลขประจำตัว 13 หลัก' },
+      { title: 'หนังสือเดินทาง (Passport)', docNumberHint: 'Passport Number' },
+      { title: 'สูติบัตร (ใบเกิด)', docNumberHint: 'เลขที่สูติบัตร' },
+      { title: 'ทะเบียนสมรส / ครอบครัว', docNumberHint: 'เลขที่ทะเบียน' },
+      { title: 'ประกันสุขภาพ / ประกันชีวิต', docNumberHint: 'เลขที่กรมธรรม์' },
+      { title: 'วุฒิการศึกษา / ประกาศนียบัตร', docNumberHint: 'เลขที่ใบประกาศ' },
+      { title: 'ประวัติการรักษา / สมุดวัคซีน', docNumberHint: 'HN / โรงพยาบาล' },
+    ],
   },
   FINANCE: {
     label: 'การเงิน & สัญญา',
+    subLabel: 'ธนาคาร & สินเชื่อ & ประกัน',
     icon: DollarSign,
     color: 'text-violet-500',
     bg: 'bg-violet-500/10 dark:bg-violet-500/15',
     border: 'border-violet-500/30',
     glow: 'hover:border-violet-500/60 hover:shadow-violet-500/10',
-    presets: ['สัญญากู้ยืม / สินเชื่อบ้าน', 'กรมธรรม์ประกันสะสมทรัพย์', 'สมุดบัญชีธนาคาร', 'เอกสารภาษี', 'พินัยกรรม'],
+    assetTypeLabel: 'สถาบัน / บัญชี / สัญญา',
+    assetPlaceholder: 'เช่น ธนาคารกสิกรไทย, ธนาคารไทยพาณิชย์, AIA ประกันชีวิต, สินเชื่อบ้าน ธอส.',
+    defaultAssetPresets: ['ธนาคารกสิกรไทย', 'ธนาคารไทยพาณิชย์', 'AIA ประกันชีวิต', 'สินเชื่อบ้าน', 'สรรพากร'],
+    docTypePresets: [
+      { title: 'สมุดบัญชีธนาคาร / พอร์ตลงทุน', docNumberHint: 'เลขที่บัญชี' },
+      { title: 'สัญญากู้ยืม / สินเชื่อบ้าน/รถ', docNumberHint: 'เลขที่สัญญากู้' },
+      { title: 'กรมธรรม์ประกันชีวิต / สะสมทรัพย์', docNumberHint: 'เลขที่กรมธรรม์' },
+      { title: 'เอกสารภาษี / 50 ทวิ / ลดหย่อน', docNumberHint: 'ปีภาษี' },
+      { title: 'พินัยกรรม / นิติกรรมสัญญา', docNumberHint: 'เลขที่นิติกรรม' },
+    ],
   },
   OTHER: {
     label: 'อื่นๆ',
+    subLabel: 'สัตว์เลี้ยง & เครื่องใช้ & คลับ',
     icon: FolderOpen,
     color: 'text-rose-500',
     bg: 'bg-rose-500/10 dark:bg-rose-500/15',
     border: 'border-rose-500/30',
     glow: 'hover:border-rose-500/60 hover:shadow-rose-500/10',
-    presets: ['เอกสารสัตว์เลี้ยง', 'ใบเสร็จชิ้นใหญ่', 'คู่มือการใช้งาน'],
+    assetTypeLabel: 'หมวดหมู่ย่อย / ชื่อกลุ่ม',
+    assetPlaceholder: 'เช่น สัตว์เลี้ยง (สุนัข/แมว), เครื่องใช้ไฟฟ้าห้องนั่งเล่น, บัตรสมาชิกคลับ',
+    defaultAssetPresets: ['สัตว์เลี้ยง (หมา/แมว)', 'เครื่องใช้ไฟฟ้า', 'บัตรสมาชิก / คลับ', 'ทั่วไป'],
+    docTypePresets: [
+      { title: 'เอกสารสัตว์เลี้ยง / สมุดวัคซีน', docNumberHint: 'เลข Microchip / ทะเบียน' },
+      { title: 'ใบรับประกันสินค้า / ใบเสร็จ', docNumberHint: 'Serial Number / Invoice No.' },
+      { title: 'คู่มือการใช้งานสินค้า', docNumberHint: 'Model / รุ่น' },
+      { title: 'บัตรสมาชิก / สิทธิพิเศษ', docNumberHint: 'Member ID' },
+    ],
   },
 };
 
@@ -113,10 +182,13 @@ export default function DocumentsPage() {
 
   // Filters & Views
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('ALL');
+  const [selectedDocType, setSelectedDocType] = useState<string>('ALL');
   const [selectedOwner, setSelectedOwner] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'updated' | 'expiry' | 'title'>('updated');
+  const [groupByAsset, setGroupByAsset] = useState(true);
 
   // Modal States
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -177,15 +249,25 @@ export default function DocumentsPage() {
     fetchDocuments();
   }, [fetchDocuments]);
 
+  // Reset SubCategory filter when Category changes
+  const handleCategoryChange = (cat: string) => {
+    setActiveCategory(cat);
+    setSelectedSubCategory('ALL');
+    setSelectedDocType('ALL');
+  };
+
   // Open Form for Adding
-  const handleOpenAdd = (presetTitle?: string, presetCategory?: DocumentCategory) => {
+  const handleOpenAdd = (presetTitle?: string, presetCategory?: DocumentCategory, presetSubCategory?: string) => {
+    const targetCategory = presetCategory || (activeCategory !== 'ALL' ? (activeCategory as DocumentCategory) : 'HOUSE');
+    const targetSubCategory = presetSubCategory || (selectedSubCategory !== 'ALL' ? selectedSubCategory : '');
+
     setEditingDoc(null);
     setFormTitle(presetTitle || '');
-    setFormCategory(presetCategory || (activeCategory !== 'ALL' ? (activeCategory as DocumentCategory) : 'HOUSE'));
-    setFormSubCategory('');
+    setFormCategory(targetCategory);
+    setFormSubCategory(targetSubCategory);
     setFormDocNumber('');
     setFormIssuer('');
-    setFormOwnerMemberId('');
+    setFormOwnerMemberId(targetCategory === 'PERSONAL' && selectedOwner !== 'ALL' && selectedOwner !== 'SHARED' ? selectedOwner : '');
     setFormPrivacy('FAMILY');
     setFormIssueDate('');
     setFormExpiryDate('');
@@ -232,7 +314,7 @@ export default function DocumentsPage() {
       setEditingDoc(null);
       setFormTitle(file.name.replace(/\.[^/.]+$/, ''));
       setFormCategory(activeCategory !== 'ALL' ? (activeCategory as DocumentCategory) : 'HOUSE');
-      setFormSubCategory('');
+      setFormSubCategory(selectedSubCategory !== 'ALL' ? selectedSubCategory : '');
       setFormDocNumber('');
       setFormIssuer('');
       setFormOwnerMemberId('');
@@ -356,12 +438,48 @@ export default function DocumentsPage() {
     setTimeout(() => setCopiedDocId(null), 2000);
   };
 
+  // Extract all unique assets / subcategories
+  const currentCategoryAssets = useMemo(() => {
+    const map = new Map<string, { count: number; category: DocumentCategory }>();
+    documents.forEach((d) => {
+      if (activeCategory !== 'ALL' && d.category !== activeCategory) return;
+      const assetName = d.sub_category?.trim();
+      if (assetName) {
+        const existing = map.get(assetName);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          map.set(assetName, { count: 1, category: d.category });
+        }
+      }
+    });
+    return Array.from(map.entries()).map(([name, data]) => ({
+      name,
+      count: data.count,
+      category: data.category,
+    }));
+  }, [documents, activeCategory]);
+
   // Filtered and Sorted documents list
   const filteredDocuments = useMemo(() => {
     const list = documents.filter((doc) => {
       // Category filter
       if (activeCategory !== 'ALL' && doc.category !== activeCategory) {
         return false;
+      }
+      // Sub-category (Asset) filter
+      if (selectedSubCategory !== 'ALL') {
+        if (selectedSubCategory === '__UNSPECIFIED__') {
+          if (doc.sub_category?.trim()) return false;
+        } else if (doc.sub_category?.trim() !== selectedSubCategory) {
+          return false;
+        }
+      }
+      // Doc type filter
+      if (selectedDocType !== 'ALL') {
+        if (!doc.title.toLowerCase().includes(selectedDocType.toLowerCase())) {
+          return false;
+        }
       }
       // Owner filter
       if (selectedOwner !== 'ALL') {
@@ -393,7 +511,87 @@ export default function DocumentsPage() {
       }
       return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '');
     });
-  }, [documents, activeCategory, selectedOwner, searchQuery, sortBy]);
+  }, [documents, activeCategory, selectedSubCategory, selectedDocType, selectedOwner, searchQuery, sortBy]);
+
+  // Grouped Documents by Asset / House / Vehicle / Member / Financial Group
+  const groupedDocuments = useMemo(() => {
+    if (!groupByAsset || selectedSubCategory !== 'ALL') {
+      return [{ key: 'ALL', label: '', count: filteredDocuments.length, docs: filteredDocuments }];
+    }
+
+    const groups: {
+      key: string;
+      label: string;
+      subTitle?: string;
+      icon?: any;
+      color?: string;
+      category?: DocumentCategory;
+      count: number;
+      docs: FamilyDocument[];
+    }[] = [];
+
+    if (activeCategory === 'PERSONAL') {
+      // Group by Family Member
+      const memberMap = new Map<string, FamilyDocument[]>();
+      filteredDocuments.forEach((doc) => {
+        const ownerId = doc.owner_member_id || 'SHARED';
+        if (!memberMap.has(ownerId)) memberMap.set(ownerId, []);
+        memberMap.get(ownerId)!.push(doc);
+      });
+
+      memberMap.forEach((docs, ownerId) => {
+        if (ownerId === 'SHARED') {
+          groups.push({
+            key: 'SHARED',
+            label: '🏠 เอกสารส่วนกลางของครอบครัว',
+            subTitle: 'ใช้ร่วมกันทุกคน',
+            icon: Users,
+            color: 'text-primary',
+            category: 'PERSONAL',
+            count: docs.length,
+            docs,
+          });
+        } else {
+          const mem = familyMembers.find((m) => m.id === ownerId);
+          groups.push({
+            key: ownerId,
+            label: `👤 ${mem?.nickname || docs[0].owner_nick || 'สมาชิก'}`,
+            subTitle: mem ? `บทบาท: ${mem.role}` : '',
+            icon: User,
+            color: mem?.member_color || docs[0].owner_color || 'text-emerald-500',
+            category: 'PERSONAL',
+            count: docs.length,
+            docs,
+          });
+        }
+      });
+    } else {
+      // Group by sub_category (Asset e.g. Car Name, House Name, Bank Name)
+      const assetMap = new Map<string, FamilyDocument[]>();
+      filteredDocuments.forEach((doc) => {
+        const asset = doc.sub_category?.trim() || 'ทั่วไป / ยังไม่ระบุกลุ่มย่อย';
+        if (!assetMap.has(asset)) assetMap.set(asset, []);
+        assetMap.get(asset)!.push(doc);
+      });
+
+      assetMap.forEach((docs, assetKey) => {
+        const cat = docs[0].category;
+        const info = CATEGORY_INFO[cat] || CATEGORY_INFO.OTHER;
+        groups.push({
+          key: assetKey,
+          label: assetKey,
+          subTitle: `${info.assetTypeLabel} • ${docs.length} รายการ`,
+          icon: info.icon,
+          color: info.color,
+          category: cat,
+          count: docs.length,
+          docs,
+        });
+      });
+    }
+
+    return groups;
+  }, [filteredDocuments, groupByAsset, selectedSubCategory, activeCategory, familyMembers]);
 
   // Overall Stats
   const totalCount = documents.length;
@@ -437,7 +635,7 @@ export default function DocumentsPage() {
             </h1>
 
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              จัดเก็บ ค้นหาเลขที่ และแจ้งเตือนวันหมดอายุ (พ.ร.บ., ภาษี, ประกัน, บัตรประชาชน) สำหรับทุกคนในครอบครัว
+              จัดระเบียบเอกสารแยกตามบ้านแต่ละหลัง, รถแต่ละคัน, สมาชิกแต่ละคน และธุรกรรมการเงินอย่างชัดเจน
             </p>
           </div>
 
@@ -559,6 +757,7 @@ export default function DocumentsPage() {
                         {doc.title}
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                        {doc.sub_category ? `[${doc.sub_category}] ` : ''}
                         {doc.owner_nick ? `ของ ${doc.owner_nick}` : 'ส่วนกลาง'} {doc.document_number ? `(${doc.document_number})` : ''}
                       </p>
                     </div>
@@ -589,11 +788,11 @@ export default function DocumentsPage() {
       )}
 
       {/* 4. INTERACTIVE 3D CATEGORY FOLDERS GRID (6 Tiles) */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-primary" />
-            <span>หมวดหมู่เอกสาร</span>
+            <span>1. เลือกหมวดหมู่หลัก</span>
           </h3>
         </div>
 
@@ -601,7 +800,7 @@ export default function DocumentsPage() {
           {/* ALL FOLDER */}
           <button
             type="button"
-            onClick={() => setActiveCategory('ALL')}
+            onClick={() => handleCategoryChange('ALL')}
             className={`p-3.5 rounded-3xl border text-left transition-all flex flex-col justify-between gap-3 shadow-soft group ${
               activeCategory === 'ALL'
                 ? 'bg-card border-primary ring-2 ring-primary/30 shadow-md'
@@ -635,7 +834,7 @@ export default function DocumentsPage() {
               <button
                 key={cat}
                 type="button"
-                onClick={() => setActiveCategory(cat)}
+                onClick={() => handleCategoryChange(cat)}
                 className={`p-3.5 rounded-3xl border text-left transition-all flex flex-col justify-between gap-3 shadow-soft group ${
                   isSelected
                     ? `bg-card border-primary ring-2 ring-primary/30 shadow-md`
@@ -654,7 +853,7 @@ export default function DocumentsPage() {
                 </div>
                 <div>
                   <p className="font-extrabold text-xs text-foreground truncate">{info.label.split(' ')[0]}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{info.label.split('&')[1] || info.label}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{info.subLabel}</p>
                 </div>
               </button>
             );
@@ -662,7 +861,117 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* 5. SEARCH & FILTER CONTROLS BAR */}
+      {/* 5. DYNAMIC ASSET & SUBCATEGORY PILL BAR (Level 2 Navigation) */}
+      {activeCategory !== 'ALL' && (
+        <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-soft space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          {/* Row 1: Asset / Sub-category Separator (e.g. by Car, House, Member, Bank) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-muted-foreground flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-primary" />
+                <span>
+                  2. แยกตาม {CATEGORY_INFO[activeCategory as DocumentCategory]?.assetTypeLabel}:
+                </span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => handleOpenAdd(undefined, activeCategory as DocumentCategory)}
+                className="text-[11px] font-extrabold text-primary hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                <span>เพิ่ม {CATEGORY_INFO[activeCategory as DocumentCategory]?.assetTypeLabel.split('/')[0]}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setSelectedSubCategory('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 transition-all ${
+                  selectedSubCategory === 'ALL'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-muted/60 hover:bg-muted text-foreground border border-border/60'
+                }`}
+              >
+                ทั้งหมด ({categoryCounts[activeCategory] || 0})
+              </button>
+
+              {currentCategoryAssets.map((asset) => (
+                <button
+                  key={asset.name}
+                  type="button"
+                  onClick={() => setSelectedSubCategory(asset.name)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 transition-all flex items-center gap-1.5 ${
+                    selectedSubCategory === asset.name
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'bg-muted/60 hover:bg-muted text-foreground border border-border/60'
+                  }`}
+                >
+                  <span>{asset.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      selectedSubCategory === asset.name
+                        ? 'bg-white/20 text-white'
+                        : 'bg-background text-muted-foreground'
+                    }`}
+                  >
+                    {asset.count}
+                  </span>
+                </button>
+              ))}
+
+              {currentCategoryAssets.length === 0 && (
+                <span className="text-[11px] text-muted-foreground/70 italic px-2 py-1">
+                  (ยังไม่มีหมวดหมู่ย่อย แตะเพิ่มเอกสารเพื่อระบุชื่อ เช่น {CATEGORY_INFO[activeCategory as DocumentCategory]?.defaultAssetPresets[0]})
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Document Type Quick Filters */}
+          <div className="space-y-1.5 pt-2 border-t border-border/60">
+            <span className="text-[11px] font-extrabold text-muted-foreground flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              <span>ชนิดเอกสารที่พบบ่อย (แตะกรอง หรือแตะเพิ่ม):</span>
+            </span>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setSelectedDocType('ALL')}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition-all ${
+                  selectedDocType === 'ALL'
+                    ? 'bg-foreground text-background shadow-xs'
+                    : 'bg-muted/40 hover:bg-muted text-muted-foreground border border-border/40'
+                }`}
+              >
+                ทุกชนิด
+              </button>
+
+              {CATEGORY_INFO[activeCategory as DocumentCategory]?.docTypePresets.map((preset) => {
+                const isSelected = selectedDocType === preset.title;
+                return (
+                  <button
+                    key={preset.title}
+                    type="button"
+                    onClick={() => setSelectedDocType(isSelected ? 'ALL' : preset.title)}
+                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition-all flex items-center gap-1 ${
+                      isSelected
+                        ? 'bg-foreground text-background shadow-xs'
+                        : 'bg-muted/40 hover:bg-muted text-foreground border border-border/40'
+                    }`}
+                  >
+                    <span>{preset.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. SEARCH & CONTROLS BAR */}
       <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-soft flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Search Bar */}
         <div className="relative flex-1">
@@ -701,6 +1010,21 @@ export default function DocumentsPage() {
             ))}
           </select>
 
+          {/* Grouping Toggle */}
+          <button
+            type="button"
+            onClick={() => setGroupByAsset(!groupByAsset)}
+            className={`px-3 py-2.5 rounded-2xl border text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-2xs ${
+              groupByAsset
+                ? 'bg-primary/10 border-primary text-primary'
+                : 'bg-background border-border text-muted-foreground hover:text-foreground'
+            }`}
+            title="สลับการจัดกลุ่มตามทรัพย์สิน/บุคคล"
+          >
+            <FolderCheck className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{groupByAsset ? 'จัดกลุ่ม' : 'แสดงรวม'}</span>
+          </button>
+
           {/* Sort By */}
           <select
             value={sortBy}
@@ -738,7 +1062,7 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* 6. DOCUMENTS CONTENT (GRID / LIST / EMPTY PRESETS) */}
+      {/* 7. DOCUMENTS CONTENT (GROUPED OR FLAT GRID / LIST) */}
       {isLoading ? (
         <LoadingSkeleton count={3} height="h-40" />
       ) : filteredDocuments.length === 0 ? (
@@ -748,391 +1072,463 @@ export default function DocumentsPage() {
           </div>
 
           <div className="space-y-1.5 max-w-md mx-auto">
-            <h3 className="font-extrabold text-base sm:text-lg text-foreground">
-              {searchQuery ? 'ไม่พบเอกสารที่ตรงกับคำค้นหา' : t.documents.emptyTitle}
-            </h3>
+            <h3 className="text-lg font-extrabold text-foreground">ยังไม่มีเอกสารในหมวดหมู่นี้</h3>
             <p className="text-xs text-muted-foreground">
-              {searchQuery ? 'ลองค้นหาด้วยคำอื่น หรือเลือกหมวดหมู่อื่น' : 'เริ่มต้นบันทึกเอกสารสำคัญของบ้าน รถ หรือสมาชิกในครอบครัว'}
+              เริ่มต้นบันทึกข้อมูลเอกสารสำคัญของบ้าน ทะเบียนรถ โฉนด หรือบัตรประชาชนเพื่อค้นหาและเตือนวันหมดอายุได้ง่ายๆ
             </p>
           </div>
 
-          {/* Recommended Starter Presets */}
-          <div className="pt-4 border-t border-border/60 max-w-lg mx-auto space-y-3">
-            <p className="text-xs font-bold text-foreground flex items-center justify-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>เอกสารสำคัญที่แนะนำให้บันทึกไว้ในบ้าน:</span>
+          {/* Quick Starter Recommendations */}
+          <div className="space-y-2 max-w-lg mx-auto text-left pt-2">
+            <p className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>แตะเพื่อเริ่มบันทึกเอกสารด่วน:</span>
             </p>
-
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {[
-                { title: 'สำเนาทะเบียนบ้าน', cat: 'HOUSE' as DocumentCategory },
-                { title: 'โฉนดที่ดิน', cat: 'HOUSE' as DocumentCategory },
-                { title: 'เล่มทะเบียนรถ', cat: 'VEHICLE' as DocumentCategory },
-                { title: 'พ.ร.บ. / ภาษีรถยนต์', cat: 'VEHICLE' as DocumentCategory },
-                { title: 'บัตรประชาชน', cat: 'PERSONAL' as DocumentCategory },
-                { title: 'หนังสือเดินทาง (Passport)', cat: 'PERSONAL' as DocumentCategory },
-                { title: 'กรมธรรม์ประกันภัย/สุขภาพ', cat: 'FINANCE' as DocumentCategory },
-              ].map((preset, idx) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(activeCategory !== 'ALL'
+                ? CATEGORY_INFO[activeCategory as DocumentCategory].docTypePresets.slice(0, 4)
+                : [
+                    { title: 'พ.ร.บ. / ป้ายภาษีรถยนต์', category: 'VEHICLE' },
+                    { title: 'สำเนาทะเบียนบ้าน', category: 'HOUSE' },
+                    { title: 'บัตรประจำตัวประชาชน', category: 'PERSONAL' },
+                    { title: 'ประกันภัยรถยนต์ (ชั้น 1)', category: 'VEHICLE' },
+                  ]
+              ).map((preset: any, idx) => (
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => handleOpenAdd(preset.title, preset.cat)}
-                  className="px-3.5 py-2 rounded-2xl bg-muted/60 hover:bg-primary hover:text-white border border-border/80 text-xs font-extrabold transition-all shadow-2xs active:scale-95"
+                  onClick={() =>
+                    handleOpenAdd(
+                      preset.title,
+                      (preset.category || activeCategory) as DocumentCategory
+                    )
+                  }
+                  className="p-3 rounded-2xl bg-muted/40 hover:bg-primary/10 border border-border/60 hover:border-primary/40 text-left text-xs font-extrabold text-foreground transition-all flex items-center justify-between group"
                 >
-                  + {preset.title}
+                  <span className="truncate">{preset.title}</span>
+                  <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary shrink-0" />
                 </button>
               ))}
             </div>
           </div>
         </div>
-      ) : viewMode === 'grid' ? (
-        /* GRID VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredDocuments.map((doc) => {
-            const catInfo = CATEGORY_INFO[doc.category] || CATEGORY_INFO.OTHER;
-            const CategoryIcon = catInfo.icon;
-            const isExpiringSoon = doc.expiry_status === 'EXPIRING_SOON';
-            const isExpired = doc.expiry_status === 'EXPIRED';
+      ) : (
+        <div className="space-y-8">
+          {groupedDocuments.map((group) => {
+            const GroupIcon = group.icon || FolderOpen;
 
             return (
-              <div
-                key={doc.id}
-                className="bg-card text-card-foreground rounded-3xl border border-border/80 shadow-soft hover:shadow-md hover:border-primary/50 transition-all flex flex-col justify-between group relative overflow-hidden"
-              >
-                {/* Expiry status accent bar */}
-                {isExpired && <div className="absolute top-0 left-0 right-0 h-1.5 bg-rose-500 z-10" />}
-                {isExpiringSoon && <div className="absolute top-0 left-0 right-0 h-1.5 bg-amber-500 z-10" />}
-
-                {/* Scan Image Header (if attachment exists) */}
-                {doc.file_url && doc.file_type?.startsWith('image/') && (
-                  <div
-                    onClick={() => setPreviewDoc(doc)}
-                    className="relative w-full h-36 bg-muted/40 overflow-hidden cursor-pointer group/img border-b border-border/60"
-                    title="แตะเพื่อดูภาพสแกนเต็ม"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={doc.file_url}
-                      alt={doc.title}
-                      className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-end p-3 text-white">
-                      <span className="text-xs font-bold flex items-center gap-1.5">
-                        <Maximize2 className="w-3.5 h-3.5" /> แตะเพื่อซูมดูภาพ
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="p-5 space-y-3.5 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    {/* Category & Privacy & Owner Pills */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-extrabold border ${catInfo.bg} ${catInfo.border} ${catInfo.color}`}
-                      >
-                        <CategoryIcon className="w-3.5 h-3.5" />
-                        <span>{t.documents.categories[doc.category]}</span>
-                      </span>
-
-                      <div className="flex items-center gap-1.5">
-                        {doc.privacy_level === 'PRIVATE' ? (
-                          <span
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                            title="ส่วนตัวเฉพาะฉัน"
-                          >
-                            <Lock className="w-3.5 h-3.5" />
+              <div key={group.key} className="space-y-4">
+                {/* Group Header Banner (if grouped mode) */}
+                {group.label && (
+                  <div className="flex items-center justify-between px-1 pb-1 border-b border-border/60">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2 rounded-2xl bg-primary/10 text-primary shadow-xs`}>
+                        <GroupIcon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-sm sm:text-base text-foreground flex items-center gap-2">
+                          <span>{group.label}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-muted text-foreground text-[11px] font-black">
+                            {group.count} เอกสาร
                           </span>
-                        ) : doc.privacy_level === 'ADULTS' ? (
-                          <span
-                            className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                            title="เฉพาะผู้ใหญ่ & แอดมิน"
-                          >
-                            <Shield className="w-3.5 h-3.5" />
-                          </span>
-                        ) : null}
-
-                        {/* Owner Badge */}
-                        {doc.owner_nick ? (
-                          <span
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-muted text-[11px] font-bold text-foreground"
-                            style={{
-                              borderLeft: `3px solid ${doc.owner_color || '#0284c7'}`,
-                            }}
-                          >
-                            <span>{doc.owner_nick}</span>
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-xl bg-muted/60 text-[10px] font-bold text-muted-foreground">
-                            ส่วนกลาง
-                          </span>
+                        </h3>
+                        {group.subTitle && (
+                          <p className="text-[11px] text-muted-foreground">{group.subTitle}</p>
                         )}
                       </div>
                     </div>
 
-                    {/* Title & Subcategory */}
-                    <div>
-                      <h4 className="font-extrabold text-base text-foreground group-hover:text-primary transition-colors leading-tight">
-                        {doc.title}
-                      </h4>
-                      {doc.sub_category && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{doc.sub_category}</p>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleOpenAdd(
+                          undefined,
+                          group.category || (activeCategory !== 'ALL' ? (activeCategory as DocumentCategory) : 'HOUSE'),
+                          group.key !== 'SHARED' && group.key !== 'ALL' ? group.label.replace(/^👤\s*/, '') : undefined
+                        )
+                      }
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-foreground font-extrabold text-xs shadow-2xs transition-all active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-primary" />
+                      <span className="hidden sm:inline">เพิ่มเอกสารในกลุ่มนี้</span>
+                      <span className="sm:hidden">เพิ่ม</span>
+                    </button>
+                  </div>
+                )}
 
-                    {/* Document Number / License Plate Badge with 1-Click Copy */}
-                    {doc.document_number && (
-                      <div className="flex items-center justify-between p-2.5 rounded-2xl bg-muted/40 border border-border/80">
-                        <div className="min-w-0 pr-2">
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase">เลขที่ / ทะเบียน</p>
-                          <p className="font-mono font-extrabold text-xs text-foreground truncate">
-                            {doc.document_number}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyDocNumber(doc.id, doc.document_number!)}
-                          className="p-2 rounded-xl bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-all shadow-2xs shrink-0"
-                          title="คัดลอกเลขที่เอกสาร"
+                {/* Cards View (Grid) */}
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.docs.map((doc) => {
+                      const catInfo = CATEGORY_INFO[doc.category] || CATEGORY_INFO.OTHER;
+                      const CategoryIcon = catInfo.icon;
+                      const isExpiringSoon = doc.expiry_status === 'EXPIRING_SOON';
+                      const isExpired = doc.expiry_status === 'EXPIRED';
+
+                      return (
+                        <div
+                          key={doc.id}
+                          className="p-5 rounded-3xl bg-card border border-border/80 shadow-soft hover:border-primary/50 hover:shadow-md transition-all flex flex-col justify-between gap-4 group relative overflow-hidden"
                         >
-                          {copiedDocId === doc.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    )}
+                          {/* Top row: Category Badge & Privacy */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-extrabold border ${catInfo.bg} ${catInfo.border} ${catInfo.color} shadow-2xs`}
+                              >
+                                <CategoryIcon className="w-3.5 h-3.5" />
+                                <span>{t.documents.categories[doc.category]}</span>
+                              </span>
 
-                    {/* Issuer & Expiry Timeline */}
-                    <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
-                      {doc.issuer && (
-                        <p className="truncate">
-                          <span className="font-semibold text-foreground">ผู้ออก: </span>
-                          <span>{doc.issuer}</span>
-                        </p>
-                      )}
+                              {doc.sub_category && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[10px] font-bold bg-muted text-muted-foreground border border-border/50 max-w-[140px] truncate">
+                                  <Tag className="w-2.5 h-2.5" />
+                                  <span className="truncate">{doc.sub_category}</span>
+                                </span>
+                              )}
+                            </div>
 
-                      {doc.expiry_date && (
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="font-semibold text-foreground flex items-center gap-1 text-[11px]">
-                            <Calendar className="w-3 h-3 text-primary" />
-                            <span>วันหมดอายุ:</span>
-                          </span>
-                          <span
-                            className={`font-black px-2.5 py-0.5 rounded-xl text-[10px] ${
-                              isExpired
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 font-black'
-                                : isExpiringSoon
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 font-black'
-                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                            }`}
-                          >
-                            {doc.expiry_date}
-                            {isExpiringSoon && ` (อีก ${doc.days_until_expiry} วัน)`}
-                            {isExpired && ' (หมดอายุแล้ว)'}
-                          </span>
+                            <div className="flex items-center gap-1.5">
+                              {doc.privacy_level === 'PRIVATE' && (
+                                <span className="p-1 rounded-lg bg-rose-500/10 text-rose-500" title="เอกสารส่วนตัว">
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                              {doc.privacy_level === 'ADULTS' && (
+                                <span className="p-1 rounded-lg bg-amber-500/10 text-amber-500" title="เฉพาะผู้ใหญ่">
+                                  <Shield className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Middle: Title, Number, Issuer & Thumbnail */}
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <h3 className="font-extrabold text-base text-foreground leading-snug group-hover:text-primary transition-colors">
+                                  {doc.title}
+                                </h3>
+
+                                {doc.issuer && (
+                                  <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                                    <span>ออกโดย: {doc.issuer}</span>
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Thumbnail preview if has file */}
+                              {doc.file_url && (
+                                <div
+                                  onClick={() => setPreviewDoc(doc)}
+                                  className="w-14 h-14 rounded-2xl overflow-hidden bg-muted border border-border/80 shrink-0 cursor-pointer relative group/thumb shadow-xs"
+                                  title="แตะเพื่อดูเอกสารแบบขยายใหญ่"
+                                >
+                                  {doc.file_type?.startsWith('image/') ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={doc.file_url}
+                                      alt={doc.title}
+                                      className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-primary bg-primary/10 gap-0.5">
+                                      <File className="w-5 h-5" />
+                                      <span className="text-[9px] font-black uppercase">PDF</span>
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                    <Maximize2 className="w-4 h-4" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 1-Click Copy Number Strip */}
+                            {doc.document_number && (
+                              <div className="p-2.5 rounded-2xl bg-muted/40 border border-border/60 flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-[10px] text-muted-foreground uppercase font-bold">เลขที่ / ทะเบียน / กรมธรรม์</p>
+                                  <p className="font-mono font-black text-sm text-foreground tracking-wide truncate">
+                                    {doc.document_number}
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyDocNumber(doc.id, doc.document_number!)}
+                                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 ${
+                                    copiedDocId === doc.id
+                                      ? 'bg-emerald-500 text-white'
+                                      : 'bg-background hover:bg-muted text-foreground border border-border/80'
+                                  }`}
+                                  title="คัดลอกเลขที่เอกสาร"
+                                >
+                                  {copiedDocId === doc.id ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>คัดลอกแล้ว</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                      <span>คัดลอก</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Expiry Date Badge */}
+                            {doc.expiry_date && (
+                              <div
+                                className={`p-2.5 rounded-2xl border flex items-center justify-between text-xs font-bold ${
+                                  isExpired
+                                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                                    : isExpiringSoon
+                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                                    : 'bg-muted/30 border-border/60 text-muted-foreground'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5 font-mono">
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span>หมดอายุ: {doc.expiry_date}</span>
+                                </span>
+
+                                <span className="text-[11px] font-extrabold">
+                                  {isExpired
+                                    ? 'หมดอายุแล้ว'
+                                    : isExpiringSoon
+                                    ? `อีก ${doc.days_until_expiry} วัน`
+                                    : 'ใช้งานได้'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Bottom Row: Owner & Actions */}
+                          <div className="pt-3 border-t border-border/60 flex items-center justify-between gap-2">
+                            {/* Owner Avatar */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              {doc.owner_nick ? (
+                                <>
+                                  <MemberAvatar
+                                    name={doc.owner_nick}
+                                    color={doc.owner_color}
+                                    avatarUrl={doc.owner_avatar}
+                                    size="sm"
+                                  />
+                                  <span className="text-xs font-bold text-foreground truncate">
+                                    {doc.owner_nick}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-xs text-muted-foreground font-bold flex items-center gap-1">
+                                  <Users className="w-3.5 h-3.5" />
+                                  <span>ส่วนกลาง</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1">
+                              {doc.file_url && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc(doc)}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-extrabold transition-colors"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ดูไฟล์</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(doc)}
+                                className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                title={t.common.edit}
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTargetId(doc.id)}
+                                className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                                title={t.common.delete}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      )}
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* LIST VIEW */
+                  <div className="rounded-3xl bg-card border border-border/80 shadow-soft overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-muted/40 border-b border-border text-muted-foreground font-extrabold uppercase">
+                          <tr>
+                            <th className="p-4">เอกสาร</th>
+                            <th className="p-4">หมวดหมู่ & กลุ่มย่อย</th>
+                            <th className="p-4">เลขที่ / ทะเบียน</th>
+                            <th className="p-4">เจ้าของ</th>
+                            <th className="p-4">วันหมดอายุ</th>
+                            <th className="p-4 text-right">การจัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60 font-medium">
+                          {group.docs.map((doc) => {
+                            const catInfo = CATEGORY_INFO[doc.category] || CATEGORY_INFO.OTHER;
+                            const CategoryIcon = catInfo.icon;
+                            const isExpiringSoon = doc.expiry_status === 'EXPIRING_SOON';
+                            const isExpired = doc.expiry_status === 'EXPIRED';
 
-                      {doc.notes && (
-                        <p className="text-[11px] text-muted-foreground italic line-clamp-2 pt-1 border-t border-border/40">
-                          &quot;{doc.notes}&quot;
-                        </p>
-                      )}
+                            return (
+                              <tr key={doc.id} className="hover:bg-muted/30 transition-colors">
+                                <td className="p-4">
+                                  <div className="flex items-center gap-3">
+                                    {doc.file_url ? (
+                                      <div
+                                        onClick={() => setPreviewDoc(doc)}
+                                        className="w-10 h-10 rounded-xl overflow-hidden bg-muted border border-border shrink-0 cursor-pointer"
+                                        title="ดูเอกสาร"
+                                      >
+                                        {doc.file_type?.startsWith('image/') ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={doc.file_url} alt={doc.title} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-primary">
+                                            <File className="w-5 h-5" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${catInfo.bg} ${catInfo.color}`}>
+                                        <CategoryIcon className="w-5 h-5" />
+                                      </div>
+                                    )}
+
+                                    <div className="min-w-0">
+                                      <p className="font-extrabold text-foreground text-sm truncate">{doc.title}</p>
+                                      {doc.issuer && <p className="text-[11px] text-muted-foreground truncate">{doc.issuer}</p>}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="p-4">
+                                  <div className="space-y-1">
+                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${catInfo.bg} ${catInfo.border} ${catInfo.color}`}>
+                                      <CategoryIcon className="w-3 h-3" />
+                                      <span>{t.documents.categories[doc.category]}</span>
+                                    </span>
+                                    {doc.sub_category && (
+                                      <p className="text-[11px] text-muted-foreground font-bold truncate">
+                                        🏷️ {doc.sub_category}
+                                      </p>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="p-4">
+                                  {doc.document_number ? (
+                                    <div className="flex items-center gap-1.5 font-mono font-bold text-foreground">
+                                      <span>{doc.document_number}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyDocNumber(doc.id, doc.document_number!)}
+                                        className="p-1 rounded-md hover:bg-muted text-muted-foreground"
+                                        title="คัดลอก"
+                                      >
+                                        {copiedDocId === doc.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground/50">-</span>
+                                  )}
+                                </td>
+
+                                <td className="p-4">
+                                  {doc.owner_nick ? (
+                                    <span
+                                      className="inline-flex items-center px-2 py-0.5 rounded-lg bg-muted text-[11px] font-bold text-foreground"
+                                      style={{ borderLeft: `3px solid ${doc.owner_color || '#0284c7'}` }}
+                                    >
+                                      {doc.owner_nick}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-[11px]">ส่วนกลาง</span>
+                                  )}
+                                </td>
+
+                                <td className="p-4">
+                                  {doc.expiry_date ? (
+                                    <span
+                                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
+                                        isExpired
+                                          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold'
+                                          : isExpiringSoon
+                                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 font-extrabold'
+                                          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      }`}
+                                    >
+                                      {doc.expiry_date}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground/50">-</span>
+                                  )}
+                                </td>
+
+                                <td className="p-4 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {doc.file_url && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewDoc(doc)}
+                                        className="p-2 rounded-xl text-primary hover:bg-primary/10"
+                                        title="ดูเอกสาร"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEdit(doc)}
+                                      className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted"
+                                      title="แก้ไข"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteTargetId(doc.id)}
+                                      className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
+                                      title="ลบ"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-
-                  {/* Bottom Actions Row */}
-                  <div className="pt-3 mt-3 border-t border-border/60 flex items-center justify-between gap-2">
-                    {doc.file_url ? (
-                      <button
-                        type="button"
-                        onClick={() => setPreviewDoc(doc)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-extrabold transition-colors"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>ดูเอกสาร</span>
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground/60 italic">ไม่มีไฟล์แนบ</span>
-                    )}
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(doc)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        title={t.common.edit}
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTargetId(doc.id)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                        title={t.common.delete}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
-      ) : (
-        /* LIST VIEW */
-        <div className="rounded-3xl bg-card border border-border/80 shadow-soft overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-muted/40 border-b border-border text-muted-foreground font-extrabold uppercase">
-                <tr>
-                  <th className="p-4">เอกสาร</th>
-                  <th className="p-4">หมวดหมู่</th>
-                  <th className="p-4">เลขที่ / ทะเบียน</th>
-                  <th className="p-4">เจ้าของ</th>
-                  <th className="p-4">วันหมดอายุ</th>
-                  <th className="p-4 text-right">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60 font-medium">
-                {filteredDocuments.map((doc) => {
-                  const catInfo = CATEGORY_INFO[doc.category] || CATEGORY_INFO.OTHER;
-                  const CategoryIcon = catInfo.icon;
-                  const isExpiringSoon = doc.expiry_status === 'EXPIRING_SOON';
-                  const isExpired = doc.expiry_status === 'EXPIRED';
-
-                  return (
-                    <tr key={doc.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          {doc.file_url ? (
-                            <div
-                              onClick={() => setPreviewDoc(doc)}
-                              className="w-10 h-10 rounded-xl overflow-hidden bg-muted border border-border shrink-0 cursor-pointer"
-                              title="ดูเอกสาร"
-                            >
-                              {doc.file_type?.startsWith('image/') ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={doc.file_url} alt={doc.title} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-primary">
-                                  <File className="w-5 h-5" />
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${catInfo.bg} ${catInfo.color}`}>
-                              <CategoryIcon className="w-5 h-5" />
-                            </div>
-                          )}
-
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-foreground text-sm truncate">{doc.title}</p>
-                            {doc.sub_category && <p className="text-[11px] text-muted-foreground truncate">{doc.sub_category}</p>}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="p-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${catInfo.bg} ${catInfo.border} ${catInfo.color}`}>
-                          <CategoryIcon className="w-3 h-3" />
-                          <span>{t.documents.categories[doc.category]}</span>
-                        </span>
-                      </td>
-
-                      <td className="p-4">
-                        {doc.document_number ? (
-                          <div className="flex items-center gap-1.5 font-mono font-bold text-foreground">
-                            <span>{doc.document_number}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyDocNumber(doc.id, doc.document_number!)}
-                              className="p-1 rounded-md hover:bg-muted text-muted-foreground"
-                              title="คัดลอก"
-                            >
-                              {copiedDocId === doc.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground/50">-</span>
-                        )}
-                      </td>
-
-                      <td className="p-4">
-                        {doc.owner_nick ? (
-                          <span
-                            className="inline-flex items-center px-2 py-0.5 rounded-lg bg-muted text-[11px] font-bold text-foreground"
-                            style={{ borderLeft: `3px solid ${doc.owner_color || '#0284c7'}` }}
-                          >
-                            {doc.owner_nick}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-[11px]">ส่วนกลาง</span>
-                        )}
-                      </td>
-
-                      <td className="p-4">
-                        {doc.expiry_date ? (
-                          <span
-                            className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
-                              isExpired
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold'
-                                : isExpiringSoon
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 font-extrabold'
-                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                            }`}
-                          >
-                            {doc.expiry_date}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/50">-</span>
-                        )}
-                      </td>
-
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {doc.file_url && (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewDoc(doc)}
-                              className="p-2 rounded-xl text-primary hover:bg-primary/10"
-                              title="ดูเอกสาร"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(doc)}
-                            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted"
-                            title="แก้ไข"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTargetId(doc.id)}
-                            className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
-                            title="ลบ"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
 
-      {/* Add / Edit Document Modal */}
+      {/* 8. ADD / EDIT DOCUMENT MODAL */}
       {isFormOpen && (
         <Modal
           isOpen={isFormOpen}
@@ -1177,19 +1573,51 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            {/* Quick Presets based on selected Category */}
-            <div>
-              <p className="text-[11px] font-bold text-muted-foreground mb-1.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>คำแนะนำเอกสารที่พบบ่อย (แตะเพื่อใส่ชื่ออัตโนมัติ):</span>
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {CATEGORY_INFO[formCategory].presets.map((preset, i) => (
+            {/* Asset / Sub-category Field (e.g. Which Car? Which House? Which Member?) */}
+            <div className="space-y-2 p-3.5 rounded-2xl bg-muted/40 border border-border/80">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-extrabold text-foreground">
+                  🏷️ ระบุ {CATEGORY_INFO[formCategory].assetTypeLabel}
+                </label>
+                <span className="text-[10px] text-muted-foreground">เพื่อให้จัดกลุ่มค้นหาง่าย</span>
+              </div>
+
+              <input
+                type="text"
+                placeholder={CATEGORY_INFO[formCategory].assetPlaceholder}
+                value={formSubCategory}
+                onChange={(e) => setFormSubCategory(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
+              />
+
+              {/* Quick suggestion chips for Asset / Sub-category */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] font-bold text-muted-foreground">แตะเพื่อเลือก:</span>
+                {/* 1. Existing Assets in Family */}
+                {Array.from(
+                  new Set(
+                    documents
+                      .filter((d) => d.category === formCategory && d.sub_category?.trim())
+                      .map((d) => d.sub_category!.trim())
+                  )
+                ).map((existingName) => (
+                  <button
+                    key={existingName}
+                    type="button"
+                    onClick={() => setFormSubCategory(existingName)}
+                    className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-extrabold border border-primary/20 transition-all active:scale-95"
+                  >
+                    ★ {existingName}
+                  </button>
+                ))}
+
+                {/* 2. Default presets */}
+                {CATEGORY_INFO[formCategory].defaultAssetPresets.map((preset, i) => (
                   <button
                     key={i}
                     type="button"
-                    onClick={() => setFormTitle(preset)}
-                    className="px-2.5 py-1 rounded-xl bg-muted/60 hover:bg-muted text-foreground text-[11px] font-semibold border border-border/50 transition-all active:scale-95"
+                    onClick={() => setFormSubCategory(preset)}
+                    className="px-2 py-0.5 rounded-lg bg-muted hover:bg-background text-foreground text-[10px] font-bold border border-border/50 transition-all active:scale-95"
                   >
                     + {preset}
                   </button>
@@ -1197,7 +1625,29 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            {/* Document Title & Subcategory */}
+            {/* Quick Presets for Document Type */}
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground mb-1.5 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>คำแนะนำชนิดเอกสาร (แตะเพื่อใส่ชื่ออัตโนมัติ):</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORY_INFO[formCategory].docTypePresets.map((preset, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setFormTitle(preset.title);
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-muted/60 hover:bg-muted text-foreground text-[11px] font-semibold border border-border/50 transition-all active:scale-95"
+                  >
+                    + {preset.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Document Title & Document Number */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5">
@@ -1206,7 +1656,7 @@ export default function DocumentsPage() {
                 <input
                   type="text"
                   required
-                  placeholder="เช่น ทะเบียนรถ Honda Civic, โฉนดที่ดินเชียงใหม่"
+                  placeholder="เช่น พ.ร.บ. 2569, ประกันชั้น 1, โฉนดที่ดิน"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
@@ -1215,49 +1665,33 @@ export default function DocumentsPage() {
 
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5">
-                  {t.documents.docSubCategory}
+                  {t.documents.docNumber} (เลขที่ / ทะเบียน / กรมธรรม์)
                 </label>
                 <input
                   type="text"
-                  placeholder="เช่น พ.ร.บ. ปี 2569, ประกันชั้น 1 ซ่อมห้าง"
-                  value={formSubCategory}
-                  onChange={(e) => setFormSubCategory(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
-
-            {/* Document Number & Issuer */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-foreground mb-1.5">
-                  {t.documents.docNumber}
-                </label>
-                <input
-                  type="text"
-                  placeholder="เช่น 1กข-9999 กทม., POL-2026-888"
+                  placeholder="เช่น 1กข-9999, POL-2026-888"
                   value={formDocNumber}
                   onChange={(e) => setFormDocNumber(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
+            </div>
 
+            {/* Issuer & Owner Member */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5">
                   {t.documents.docIssuer}
                 </label>
                 <input
                   type="text"
-                  placeholder="เช่น กรมการขนส่ง, วิริยะประกันภัย, AIA"
+                  placeholder="เช่น กรมการขนส่งทางบก, กรุงเทพประกันภัย, ธนาคารกสิกร"
                   value={formIssuer}
                   onChange={(e) => setFormIssuer(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
-            </div>
 
-            {/* Owner & Privacy Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5">
                   {t.documents.docOwner}
@@ -1265,9 +1699,9 @@ export default function DocumentsPage() {
                 <select
                   value={formOwnerMemberId}
                   onChange={(e) => setFormOwnerMemberId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="">🏠 {t.documents.familyShared}</option>
+                  <option value="">🏠 ส่วนกลางของบ้าน</option>
                   {familyMembers.map((m) => (
                     <option key={m.id} value={m.id}>
                       👤 {m.nickname} ({m.role})
@@ -1275,149 +1709,184 @@ export default function DocumentsPage() {
                   ))}
                 </select>
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-foreground mb-1.5">
-                  {t.documents.privacy}
-                </label>
-                <select
-                  value={formPrivacy}
-                  onChange={(e) => setFormPrivacy(e.target.value as DocumentPrivacyLevel)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="FAMILY">👨‍👩‍👧‍👦 {t.documents.privacyLevels.FAMILY}</option>
-                  <option value="ADULTS">🔒 {t.documents.privacyLevels.ADULTS}</option>
-                  <option value="PRIVATE">🔐 {t.documents.privacyLevels.PRIVATE}</option>
-                </select>
-              </div>
             </div>
 
-            {/* Issue Date & Expiry Date */}
+            {/* Issue Date & Expiry Date (With Expiry Alert) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5">
                   {t.documents.issueDate}
                 </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="date"
-                    value={formIssueDate}
-                    onChange={(e) => setFormIssueDate(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
+                <input
+                  type="date"
+                  value={formIssueDate}
+                  onChange={(e) => setFormIssueDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
-                  <span>{t.documents.expiryDate} (เตือนต่ออายุ)</span>
-                  {formExpiryDate && (
-                    <button
-                      type="button"
-                      onClick={() => setFormExpiryDate('')}
-                      className="text-[10px] text-rose-500 font-bold hover:underline"
-                    >
-                      ลบวันหมดอายุ
-                    </button>
-                  )}
+                  <span>{t.documents.expiryDate}</span>
+                  <span className="text-[10px] text-amber-500 font-bold">มีระบบแจ้งเตือนต่ออายุ</span>
                 </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 text-amber-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="date"
-                    value={formExpiryDate}
-                    onChange={(e) => setFormExpiryDate(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
+                <input
+                  type="date"
+                  value={formExpiryDate}
+                  onChange={(e) => setFormExpiryDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                />
               </div>
             </div>
 
-            {/* File Attachment / Scan Upload */}
+            {/* Privacy Level */}
             <div>
               <label className="block text-xs font-bold text-foreground mb-1.5">
-                {t.documents.uploadFile}
+                {t.documents.privacy}
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormPrivacy('FAMILY')}
+                  className={`p-2.5 rounded-2xl border text-center text-xs font-bold transition-all ${
+                    formPrivacy === 'FAMILY'
+                      ? 'border-primary bg-primary/10 ring-2 ring-primary/30 text-primary'
+                      : 'border-border bg-card hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <Users className="w-4 h-4 mx-auto mb-1" />
+                  <span>ทุกคนในบ้าน</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormPrivacy('ADULTS')}
+                  className={`p-2.5 rounded-2xl border text-center text-xs font-bold transition-all ${
+                    formPrivacy === 'ADULTS'
+                      ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30 text-amber-500'
+                      : 'border-border bg-card hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <Shield className="w-4 h-4 mx-auto mb-1" />
+                  <span>เฉพาะผู้ใหญ่</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormPrivacy('PRIVATE')}
+                  className={`p-2.5 rounded-2xl border text-center text-xs font-bold transition-all ${
+                    formPrivacy === 'PRIVATE'
+                      ? 'border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/30 text-rose-500'
+                      : 'border-border bg-card hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <Lock className="w-4 h-4 mx-auto mb-1" />
+                  <span>ส่วนตัว (ฉันคนเดียว)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* File Upload / Scanner */}
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1.5">
+                แนบไฟล์เอกสาร / รูปถ่าย / สแกน (สูงสุด 8MB)
               </label>
 
               {formFileUrl ? (
-                <div className="p-3.5 rounded-2xl bg-muted/50 border border-border flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-3.5 rounded-2xl bg-muted/40 border border-border flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     {formFileType?.startsWith('image/') ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={formFileUrl}
-                        alt="Document Preview"
+                        alt="Preview"
                         className="w-12 h-12 rounded-xl object-cover border border-border shrink-0"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                        <File className="w-6 h-6" />
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <File className="w-6 h-6 text-primary" />
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="font-bold text-xs text-foreground truncate">{formFileName || 'ไฟล์แนบ'}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{formFileType || 'เอกสาร'}</p>
+                      <p className="text-xs font-bold text-foreground truncate">{formFileName || 'ไฟล์เอกสารแนบ'}</p>
+                      <p className="text-[10px] text-muted-foreground">พร้อมจัดเก็บเข้าสู่ระบบ Vault</p>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormFileUrl(null);
-                      setFormFileName(null);
-                      setFormFileType(null);
-                    }}
-                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors"
-                    title={t.documents.removeFile}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                      <Upload className="w-4 h-4" />
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormFileUrl(null);
+                        setFormFileName(null);
+                        setFormFileType(null);
+                      }}
+                      className="p-2 rounded-xl bg-background border border-border hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 transition-colors"
+                      title="ลบไฟล์"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <label className="border-2 border-dashed border-border hover:border-primary/60 rounded-3xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer bg-card hover:bg-muted/30 transition-all text-center group">
-                  <Upload className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                  <div>
-                    <p className="text-xs font-bold text-foreground">แตะเพื่อถ่ายรูป หรือเลือกไฟล์เอกสาร (PDF, JPG, PNG)</p>
-                    <p className="text-[10px] text-muted-foreground">ขนาดไฟล์สูงสุด 8MB</p>
-                  </div>
+                <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group">
                   <input
                     type="file"
                     accept="image/*,application/pdf"
                     onChange={handleFileChange}
                     className="hidden"
                   />
+                  <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                    <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                      แตะเพื่อถ่ายรูป หรือ เลือกไฟล์รูปภาพ / PDF
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      รองรับไฟล์ JPG, PNG, PDF (ไม่เกิน 8MB)
+                    </p>
+                  </div>
                 </label>
               )}
             </div>
 
-            {/* Additional Notes */}
+            {/* Notes */}
             <div>
               <label className="block text-xs font-bold text-foreground mb-1.5">
                 {t.documents.notes}
               </label>
               <textarea
                 rows={2}
-                placeholder="เช่น เก็บตัวจริงไว้ในตู้เซฟห้องนอนใหญ่, ต่ออายุผ่านแอป DLT ได้เลย"
+                placeholder="บันทึกรายละเอียดเพิ่มเติม เช่น เก็บไว้ในตู้เซฟห้องนอน, ต่ออายุผ่านแอป DLT"
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
-            {/* Form Action Buttons */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+            {/* Form Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/80">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                className="px-4 py-2.5 rounded-2xl border border-border text-xs font-bold hover:bg-muted"
               >
                 {t.common.cancel}
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !formTitle.trim()}
-                className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-extrabold shadow-md transition-all flex items-center gap-1.5"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 rounded-2xl bg-primary hover:bg-primary-600 active:scale-95 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
               >
                 {isSubmitting ? (
                   <>
@@ -1433,67 +1902,72 @@ export default function DocumentsPage() {
         </Modal>
       )}
 
-      {/* Document Lightbox / Viewer Modal */}
+      {/* 9. LIGHTBOX PREVIEW MODAL */}
       {previewDoc && (
         <Modal
           isOpen={!!previewDoc}
           onClose={() => setPreviewDoc(null)}
-          title={previewDoc.title}
-          maxWidth="lg"
+          title={`เอกสาร: ${previewDoc.title}`}
+          maxWidth="2xl"
         >
           <div className="space-y-4">
-            <div className="p-3 rounded-2xl bg-muted/40 border border-border flex items-center justify-between text-xs">
-              <div>
-                <p className="font-extrabold text-foreground">{previewDoc.title}</p>
-                {previewDoc.document_number && (
-                  <p className="font-mono text-muted-foreground font-semibold">
-                    เลขที่: {previewDoc.document_number}
-                  </p>
-                )}
-              </div>
-
-              {previewDoc.file_url && (
-                <a
-                  href={previewDoc.file_url}
-                  download={previewDoc.file_name || 'document'}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-600 transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{t.documents.downloadAttachment}</span>
-                </a>
-              )}
-            </div>
-
-            {/* Document display preview */}
-            <div className="max-h-[65vh] overflow-auto rounded-2xl bg-muted/20 border border-border flex items-center justify-center p-2">
-              {previewDoc.file_type?.startsWith('image/') ? (
+            <div className="flex items-center justify-center p-2 rounded-2xl bg-black/5 dark:bg-white/5 border border-border/50 max-h-[75vh] overflow-hidden">
+              {previewDoc.file_type?.startsWith('image/') || previewDoc.file_url?.startsWith('data:image/') ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={previewDoc.file_url!}
                   alt={previewDoc.title}
-                  className="max-w-full h-auto rounded-xl object-contain shadow-md"
-                />
-              ) : previewDoc.file_url ? (
-                <iframe
-                  src={previewDoc.file_url}
-                  title={previewDoc.title}
-                  className="w-full h-[55vh] rounded-xl border border-border"
+                  className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl shadow-md"
                 />
               ) : (
-                <p className="p-8 text-xs text-muted-foreground">ไม่มีข้อมูลไฟล์สำหรับแสดงตัวอย่าง</p>
+                <iframe
+                  src={previewDoc.file_url!}
+                  title={previewDoc.title}
+                  className="w-full h-[70vh] rounded-xl border border-border"
+                />
               )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-border/60">
+              <div className="min-w-0">
+                <p className="font-extrabold text-sm text-foreground truncate">{previewDoc.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {previewDoc.sub_category ? `[${previewDoc.sub_category}] ` : ''}
+                  {previewDoc.document_number ? `เลขที่: ${previewDoc.document_number}` : ''}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {previewDoc.document_number && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDocNumber(previewDoc.id, previewDoc.document_number!)}
+                    className="px-3 py-2 rounded-xl bg-card hover:bg-muted border border-border text-foreground font-bold text-xs flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>คัดลอกเลขที่</span>
+                  </button>
+                )}
+
+                <a
+                  href={previewDoc.file_url!}
+                  download={`${previewDoc.title}.${previewDoc.file_type?.includes('pdf') ? 'pdf' : 'jpg'}`}
+                  className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>ดาวน์โหลด</span>
+                </a>
+              </div>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* 10. DELETE CONFIRMATION DIALOG */}
       <ConfirmDialog
         isOpen={!!deleteTargetId}
         onClose={() => setDeleteTargetId(null)}
         onConfirm={handleConfirmDelete}
-        title={t.common.deleteConfirmTitle}
-        message={t.common.deleteConfirmMessage}
       />
     </div>
   );
