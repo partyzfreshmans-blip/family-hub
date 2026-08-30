@@ -6,7 +6,7 @@ import { createClient, Client as TursoClient } from '@libsql/client';
 // Turso configuration
 const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL;
 const tursoAuthToken = process.env.TURSO_AUTH_TOKEN;
-const isTursoEnabled = !!tursoUrl;
+const isTursoEnabled = !!tursoUrl && !!tursoAuthToken && tursoAuthToken !== 'your_turso_auth_token_here' && !tursoAuthToken.includes('placeholder');
 
 let tursoClient: TursoClient | null = null;
 let tursoInitPromise: Promise<void> | null = null;
@@ -591,6 +591,12 @@ export async function getDb(): Promise<Database> {
         dbInstance.run('ALTER TABLE bill_payments ADD COLUMN attachment_name TEXT;');
         dbInstance.run('ALTER TABLE bill_payments ADD COLUMN attachment_type TEXT;');
         dbInstance.run('ALTER TABLE bill_payments ADD COLUMN image_url TEXT;');
+      } catch (e) {
+        // columns might already exist
+      }
+      try {
+        dbInstance.run('ALTER TABLE shopping_items ADD COLUMN price REAL;');
+        dbInstance.run('ALTER TABLE shopping_items ADD COLUMN expense_id TEXT;');
       } catch (e) {
         // columns might already exist
       }
