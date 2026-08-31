@@ -358,3 +358,97 @@ export interface FamilyDocument {
   expiry_status?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY';
   days_until_expiry?: number | null;
 }
+
+// ----------------------------------------------------
+// Financial & Debt Management Types
+// ----------------------------------------------------
+
+export type IncomeSourceType = 'SALARY' | 'SIDE_JOB' | 'RENTAL' | 'BUSINESS' | 'INVESTMENT' | 'OTHER';
+
+export interface Income {
+  id: string;
+  family_id: string;
+  amount: number;
+  source_type: IncomeSourceType;
+  source_name: string; // e.g. 'เงินเดือนประจำ', 'Grab Express', 'ค่าเช่าบ้านสุขใจ', 'ค่าเช่ารถ Civic'
+  received_date: string; // YYYY-MM-DD
+  received_by: string; // family_member_id
+  asset_id?: string | null; // linked debt/asset id if rental
+  note?: string | null;
+  attachment_url?: string | null;
+  created_at: string;
+  updated_at: string;
+  receiver_nick?: string;
+  receiver_color?: string;
+}
+
+export type DebtType = 'MORTGAGE' | 'AUTO' | 'CREDIT_CARD' | 'PERSONAL_LOAN' | 'OTHER';
+export type DebtStatus = 'ACTIVE' | 'PAID_OFF';
+
+export interface Debt {
+  id: string;
+  family_id: string;
+  name: string; // e.g. 'สินเชื่อบ้านสุขใจ (กสิกรไทย)', 'ค่างวดรถ Honda Civic (กรุงศรี)'
+  debt_type: DebtType;
+  total_amount: number; // Original loan amount
+  remaining_balance: number; // Current remaining debt balance
+  monthly_payment: number; // Monthly installment
+  interest_rate?: number | null; // % per year
+  total_installments?: number | null; // Total installments (e.g. 60, 360)
+  paid_installments: number; // Number of installments paid
+  due_day_of_month?: number | null; // Day of month (1-31)
+  lender_name?: string | null; // Bank / Financial institute
+  is_rental_asset: number; // 0 or 1
+  expected_rental_income: number; // Expected monthly rental income
+  tenant_name?: string | null; // Tenant name if rented
+  notes?: string | null;
+  status: DebtStatus;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Computed fields
+  net_rental_cashflow?: number; // expected_rental_income - monthly_payment
+  progress_percent?: number;
+}
+
+export interface DebtPayment {
+  id: string;
+  debt_id: string;
+  family_id: string;
+  amount: number;
+  principal_amount?: number | null;
+  interest_amount?: number | null;
+  paid_date: string;
+  paid_by: string;
+  installment_number?: number | null;
+  slip_url?: string | null;
+  note?: string | null;
+  created_at: string;
+  payer_nick?: string;
+  debt_name?: string;
+}
+
+export interface CashflowSummary {
+  month: string;
+  totalIncome: number;
+  totalExpense: number;
+  totalDebtPayment: number;
+  netCashflow: number; // totalIncome - (totalExpense + totalDebtPayment)
+  incomeBreakdown: {
+    salary: number;
+    sideJob: number;
+    rental: number;
+    other: number;
+  };
+  debtSummary: {
+    totalRemainingDebt: number;
+    monthlyCommitment: number;
+    dsrPercent: number; // (monthlyCommitment / totalIncome) * 100
+  };
+  rentalAssets: Array<{
+    debt: Debt;
+    monthlyRent: number;
+    monthlyPayment: number;
+    netCashflow: number;
+  }>;
+}

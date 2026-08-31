@@ -405,6 +405,66 @@ const DB_SCHEMA = `
     FOREIGN KEY (created_by) REFERENCES family_members(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS incomes (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    amount REAL NOT NULL CHECK(amount > 0),
+    source_type TEXT NOT NULL CHECK(source_type IN ('SALARY', 'SIDE_JOB', 'RENTAL', 'BUSINESS', 'INVESTMENT', 'OTHER')),
+    source_name TEXT NOT NULL,
+    received_date TEXT NOT NULL,
+    received_by TEXT NOT NULL,
+    asset_id TEXT,
+    note TEXT,
+    attachment_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (received_by) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS debts (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    debt_type TEXT NOT NULL CHECK(debt_type IN ('MORTGAGE', 'AUTO', 'CREDIT_CARD', 'PERSONAL_LOAN', 'OTHER')),
+    total_amount REAL NOT NULL,
+    remaining_balance REAL NOT NULL,
+    monthly_payment REAL NOT NULL,
+    interest_rate REAL,
+    total_installments INTEGER,
+    paid_installments INTEGER DEFAULT 0,
+    due_day_of_month INTEGER,
+    lender_name TEXT,
+    is_rental_asset INTEGER DEFAULT 0,
+    expected_rental_income REAL DEFAULT 0,
+    tenant_name TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'PAID_OFF')),
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS debt_payments (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL,
+    family_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    principal_amount REAL,
+    interest_amount REAL,
+    paid_date TEXT NOT NULL,
+    paid_by TEXT NOT NULL,
+    installment_number INTEGER,
+    slip_url TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (debt_id) REFERENCES debts(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (paid_by) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_members_family ON family_members(family_id);
   CREATE INDEX IF NOT EXISTS idx_members_user ON family_members(user_id);
   CREATE INDEX IF NOT EXISTS idx_events_family_date ON events(family_id, event_date);
@@ -421,6 +481,9 @@ const DB_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_sos_family ON sos_events(family_id, status);
   CREATE INDEX IF NOT EXISTS idx_docs_family ON documents(family_id, category);
   CREATE INDEX IF NOT EXISTS idx_docs_expiry ON documents(family_id, expiry_date);
+  CREATE INDEX IF NOT EXISTS idx_incomes_family_date ON incomes(family_id, received_date);
+  CREATE INDEX IF NOT EXISTS idx_debts_family ON debts(family_id, status);
+  CREATE INDEX IF NOT EXISTS idx_debt_payments_debt ON debt_payments(debt_id, paid_date);
 `;
 
 async function ensureTursoInitialized() {
@@ -665,6 +728,44 @@ function initLocalSeedIfEmpty(db: Database) {
     db.run(
       `INSERT OR REPLACE INTO family_invites VALUES ('inv_demo', ?, 'FAM-7KX92', 'ADULT', NULL, 0, 'mem_dad', ?)`,
       [familyId, now]
+    );
+
+    // Initial Debts & Rental Assets
+    db.run(
+      `INSERT OR REPLACE INTO debts (id, family_id, name, debt_type, total_amount, remaining_balance, monthly_payment, interest_rate, total_installments, paid_installments, due_day_of_month, lender_name, is_rental_asset, expected_rental_income, tenant_name, notes, status, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'mem_dad', ?, ?)`,
+      ['debt_home', familyId, 'สินเชื่อบ้านสุขใจ (บ้านปล่อยเช่า)', 'MORTGAGE', 3200000, 2850000, 18000, 3.75, 360, 48, 25, 'ธนาคารกสิกรไทย', 1, 22000, 'คุณสมบูรณ์ จิตดี (สัญญา 1 ปี)', 'ปล่อยเช่าบ้านเดี่ยว ค่างวด 18,000 รับค่าเช่า 22,000 (กำไร +4,000/ด)', now, now]
+    );
+
+    db.run(
+      `INSERT OR REPLACE INTO debts (id, family_id, name, debt_type, total_amount, remaining_balance, monthly_payment, interest_rate, total_installments, paid_installments, due_day_of_month, lender_name, is_rental_asset, expected_rental_income, tenant_name, notes, status, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'mem_dad', ?, ?)`,
+      ['debt_car', familyId, 'ค่างวดรถยนต์ Honda Civic (2ขค-8888)', 'AUTO', 570000, 399000, 9500, 2.79, 60, 18, 5, 'กรุงศรี ออโต้', 1, 12000, 'ผู้เช่ารายเดือน/Car Sharing', 'ผ่อนงวดละ 9,500 ปล่อยเช่ารายเดือน 12,000 (กำไร +2,500/ด)', now, now]
+    );
+
+    // Initial Incomes
+    db.run(
+      `INSERT OR REPLACE INTO incomes (id, family_id, amount, source_type, source_name, received_date, received_by, asset_id, note, attachment_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      ['inc_salary', familyId, 45000, 'SALARY', 'เงินเดือนประจำ (บ.ไทยซอฟต์แวร์)', today, 'mem_dad', null, 'เงินเดือนหลักเข้าบัญชี', now, now]
+    );
+
+    db.run(
+      `INSERT OR REPLACE INTO incomes (id, family_id, amount, source_type, source_name, received_date, received_by, asset_id, note, attachment_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      ['inc_grab', familyId, 4200, 'SIDE_JOB', 'Grab Express วิ่งส่งพัสดุเสริม', today, 'mem_dad', null, 'รายได้เสริมสัปดาห์นี้ วิ่งช่วงเย็นและเสาร์-อาทิตย์', now, now]
+    );
+
+    db.run(
+      `INSERT OR REPLACE INTO incomes (id, family_id, amount, source_type, source_name, received_date, received_by, asset_id, note, attachment_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      ['inc_rent_home', familyId, 22000, 'RENTAL', 'ค่าเช่าบ้านสุขใจ (คุณสมบูรณ์)', today, 'mem_dad', 'debt_home', 'ค่าเช่าประจำเดือน', now, now]
+    );
+
+    db.run(
+      `INSERT OR REPLACE INTO incomes (id, family_id, amount, source_type, source_name, received_date, received_by, asset_id, note, attachment_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      ['inc_rent_car', familyId, 12000, 'RENTAL', 'ค่าเช่ารถ Honda Civic รายเดือน', today, 'mem_dad', 'debt_car', 'ค่าเช่ารถสร้างกระแสเงินสด', now, now]
     );
   } catch (err) {
     console.error('[DB] Auto-seed error:', err);

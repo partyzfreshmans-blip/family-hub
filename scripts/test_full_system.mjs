@@ -376,7 +376,94 @@ async function runAudit() {
   const dadSettingRes = await apiRequest('/api/families/settings', 'PATCH', {
     monthlyBudget: 30000,
   }, dadCookie);
-  assert(dadSettingRes.status === 200 && dadSettingRes.data.success, 'Admin (Dad) updates Family Budget to 30,000 THB', 'Family Settings');
+  assert(dadSettingRes.status === 200 && dadSettingRes.data.success, 'Admin (Dad) updates Family Budget to 30,000 THB', 'Family Settings', dadSettingRes);
+
+  // -------------------------------------------------------------
+  // 12. FINANCE, DEBTS, RENTAL ASSETS & GRAB EXPRESS
+  // -------------------------------------------------------------
+  console.log('\n📌 12. Testing Finance, Debts, Rental Cashflow & Side Hustle...');
+  const today = new Date().toISOString().substring(0, 10);
+  
+  // Child blocked from Finance
+  const tonFinanceRes = await apiRequest('/api/finance', 'GET', null, tonCookie);
+  assert(tonFinanceRes.status === 403, 'Child blocked from Family Finance Overview (403)', 'Finance & Debts', tonFinanceRes);
+
+  // Dad records Main Salary
+  const addSalaryRes = await apiRequest('/api/incomes', 'POST', {
+    amount: 45000,
+    sourceType: 'SALARY',
+    sourceName: 'เงินเดือนประจำ บ.ซอฟต์แวร์',
+    receivedDate: today,
+    note: 'เงินเดือนหลักเข้าบัญชี',
+  }, dadCookie);
+  assert(addSalaryRes.status === 200 && addSalaryRes.data.success, 'Dad records Main Job Salary (+45,000 THB)', 'Finance & Debts', addSalaryRes);
+
+  // Dad records Grab Express Side Hustle
+  const addGrabRes = await apiRequest('/api/incomes', 'POST', {
+    amount: 4200,
+    sourceType: 'SIDE_JOB',
+    sourceName: 'Grab Express ส่งของ',
+    receivedDate: today,
+    note: 'วิ่งรอบเย็นและเสาร์อาทิตย์ (15 เที่ยว)',
+  }, dadCookie);
+  assert(addGrabRes.status === 200 && addGrabRes.data.success, 'Dad records Grab Express Side Hustle (+4,200 THB)', 'Finance & Debts', addGrabRes);
+
+  // Dad adds House Rental Asset & Mortgage
+  const addHouseDebt = await apiRequest('/api/debts', 'POST', {
+    name: 'สินเชื่อบ้านสุขใจ (ปล่อยเช่า)',
+    debtType: 'MORTGAGE',
+    totalAmount: 3200000,
+    remainingBalance: 2850000,
+    monthlyPayment: 18000,
+    interestRate: 3.75,
+    totalInstallments: 360,
+    paidInstallments: 48,
+    lenderName: 'ธนาคารกสิกรไทย',
+    isRentalAsset: true,
+    expectedRentalIncome: 22000,
+    tenantName: 'คุณสมบูรณ์ จิตดี',
+  }, dadCookie);
+  assert(addHouseDebt.status === 200 && addHouseDebt.data.success, 'Dad adds House Mortgage & Rental Asset (+22k rent vs -18k loan)', 'Finance & Debts', addHouseDebt);
+  const houseDebtId = addHouseDebt.data.debtId;
+
+  // Dad adds Car Rental Asset & Loan
+  const addCarDebt = await apiRequest('/api/debts', 'POST', {
+    name: 'ค่างวดรถ Honda Civic 2ขค-8888',
+    debtType: 'AUTO',
+    totalAmount: 570000,
+    remainingBalance: 399000,
+    monthlyPayment: 9500,
+    totalInstallments: 60,
+    paidInstallments: 18,
+    lenderName: 'กรุงศรี ออโต้',
+    isRentalAsset: true,
+    expectedRentalIncome: 12000,
+    tenantName: 'ผู้เช่ารายเดือน',
+  }, dadCookie);
+  assert(addCarDebt.status === 200 && addCarDebt.data.success, 'Dad adds Car Loan & Rental Asset (+12k rent vs -9.5k loan)', 'Finance & Debts', addCarDebt);
+  const carDebtId = addCarDebt.data.debtId;
+
+  // Dad fetches Finance Overview and checks Net Cashflow calculations
+  const financeOverview = await apiRequest('/api/finance', 'GET', null, dadCookie);
+  assert(financeOverview.status === 200 && financeOverview.data.summary, 'Dad retrieves Finance & Cashflow Overview', 'Finance & Debts', financeOverview);
+  
+  const rentalList = financeOverview.data.summary.rentalAssets || [];
+  const houseRental = rentalList.find(r => r.debt.debt_type === 'MORTGAGE');
+  assert(houseRental && houseRental.netCashflow === 4000, 'House Net Rental Cashflow verified (+4,000 THB/month profit)', 'Finance & Debts', houseRental);
+
+  const carRental = rentalList.find(r => r.debt.debt_type === 'AUTO');
+  assert(carRental && carRental.netCashflow === 2500, 'Car Net Rental Cashflow verified (+2,500 THB/month profit)', 'Finance & Debts', carRental);
+
+  // Dad pays installment on Car loan
+  const payCarRes = await apiRequest('/api/debts', 'PATCH', {
+    debtId: carDebtId,
+    amount: 9500,
+    principalAmount: 7500,
+    interestAmount: 2000,
+    paidDate: today,
+    recordExpense: true,
+  }, dadCookie);
+  assert(payCarRes.status === 200 && payCarRes.data.success && payCarRes.data.remainingBalance === 391500, 'Car installment payment updates debt balance & records expense', 'Finance & Debts', payCarRes);
 
   // -------------------------------------------------------------
   // SUMMARY REPORT
