@@ -533,6 +533,66 @@ async function ensureTursoInitialized() {
       } catch (e) {
         // columns might already exist
       }
+
+      // Explicitly ensure incomes, debts, and debt_payments tables exist
+      try {
+        await tursoClient.execute(`CREATE TABLE IF NOT EXISTS incomes (
+          id TEXT PRIMARY KEY,
+          family_id TEXT NOT NULL,
+          amount REAL NOT NULL CHECK(amount > 0),
+          source_type TEXT NOT NULL CHECK(source_type IN ('SALARY', 'SIDE_JOB', 'RENTAL', 'BUSINESS', 'INVESTMENT', 'OTHER')),
+          source_name TEXT NOT NULL,
+          received_date TEXT NOT NULL,
+          received_by TEXT NOT NULL,
+          asset_id TEXT,
+          note TEXT,
+          attachment_url TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`);
+      } catch (e) {
+        console.error('[Turso] incomes table safety check:', e);
+      }
+      try {
+        await tursoClient.execute(`CREATE TABLE IF NOT EXISTS debts (
+          id TEXT PRIMARY KEY,
+          family_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          debt_type TEXT NOT NULL CHECK(debt_type IN ('MORTGAGE', 'AUTO', 'CREDIT_CARD', 'PERSONAL_LOAN', 'OTHER')),
+          total_amount REAL NOT NULL,
+          remaining_balance REAL NOT NULL,
+          monthly_payment REAL NOT NULL,
+          interest_rate REAL,
+          total_installments INTEGER,
+          paid_installments INTEGER DEFAULT 0,
+          due_day_of_month INTEGER,
+          lender_name TEXT,
+          is_rental_asset INTEGER DEFAULT 0,
+          expected_rental_income REAL DEFAULT 0,
+          tenant_name TEXT,
+          notes TEXT,
+          status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'PAID_OFF')),
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`);
+      } catch (e) {}
+      try {
+        await tursoClient.execute(`CREATE TABLE IF NOT EXISTS debt_payments (
+          id TEXT PRIMARY KEY,
+          debt_id TEXT NOT NULL,
+          family_id TEXT NOT NULL,
+          amount REAL NOT NULL,
+          principal_amount REAL,
+          interest_amount REAL,
+          paid_date TEXT NOT NULL,
+          paid_by TEXT NOT NULL,
+          installment_number INTEGER,
+          slip_url TEXT,
+          note TEXT,
+          created_at TEXT NOT NULL
+        )`);
+      } catch (e) {}
       
       const checkRes = await tursoClient.execute('SELECT count(*) as count FROM families');
       const count = (checkRes.rows[0]?.count as number) || 0;

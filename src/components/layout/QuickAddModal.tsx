@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar, CheckSquare, ShoppingCart, DollarSign, Receipt, ArrowLeft, Plus, Clock } from 'lucide-react';
+import { Calendar, CheckSquare, ShoppingCart, DollarSign, Receipt, ArrowLeft, Plus, Clock, Wallet } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -11,10 +11,10 @@ interface QuickAddModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  defaultType?: 'event' | 'task' | 'shopping' | 'expense' | 'bill' | null;
+  defaultType?: 'event' | 'task' | 'shopping' | 'expense' | 'bill' | 'income' | null;
 }
 
-type AddType = 'select' | 'event' | 'task' | 'shopping' | 'expense' | 'bill';
+type AddType = 'select' | 'event' | 'task' | 'shopping' | 'expense' | 'bill' | 'income';
 
 export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }: QuickAddModalProps) {
   const { t } = useLanguage();
@@ -43,8 +43,8 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
   // Shopping form
   const [shopName, setShopName] = useState('');
   const [shopQty, setShopQty] = useState('1');
-  const [shopUnit, setShopUnit] = useState('');
-  const [shopCat, setShopCat] = useState<'Grocery' | 'Household' | 'Pharmacy' | 'Personal' | 'Pets' | 'Other'>('Grocery');
+  const [shopUnit, setShopUnit] = useState('ชิ้น');
+  const [shopCat, setShopCat] = useState('Grocery');
 
   // Expense form
   const [expAmount, setExpAmount] = useState('');
@@ -57,6 +57,13 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
   const [billDueDate, setBillDueDate] = useState(today);
   const [billRecurrence, setBillRecurrence] = useState('MONTHLY');
 
+  // Income form
+  const [incomeAmount, setIncomeAmount] = useState('');
+  const [incomeSourceName, setIncomeSourceName] = useState('');
+  const [incomeSourceType, setIncomeSourceType] = useState('SALARY');
+  const [incomeDate, setIncomeDate] = useState(today);
+  const [incomeNote, setIncomeNote] = useState('');
+
   const resetForms = () => {
     setActiveType('select');
     setError(null);
@@ -67,6 +74,11 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
     setExpDesc('');
     setBillName('');
     setBillAmount('');
+    setIncomeAmount('');
+    setIncomeSourceName('');
+    setIncomeSourceType('SALARY');
+    setIncomeDate(today);
+    setIncomeNote('');
   };
 
   const handleClose = () => {
@@ -145,6 +157,23 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error);
+      } else if (activeType === 'income') {
+        const res = await fetch('/api/incomes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: parseFloat(incomeAmount),
+            sourceType: incomeSourceType,
+            sourceName: incomeSourceName,
+            receivedDate: incomeDate,
+            receivedBy: member?.id,
+            note: incomeNote,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to save income');
+        }
       }
 
       handleClose();
@@ -167,7 +196,8 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
         activeType === 'event' ? t.quickAdd.event :
         activeType === 'task' ? t.quickAdd.task :
         activeType === 'shopping' ? t.quickAdd.shopping :
-        activeType === 'expense' ? t.quickAdd.expense : t.quickAdd.bill
+        activeType === 'expense' ? t.quickAdd.expense :
+        activeType === 'bill' ? t.quickAdd.bill : 'รายรับ'
       }`}
     >
       {error && (
@@ -195,7 +225,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
             onClick={() => setActiveType('task')}
             className="flex items-center gap-3.5 p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/60 transition-all text-left group"
           >
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
               <CheckSquare className="w-5 h-5" />
             </div>
             <div>
@@ -208,7 +238,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
             onClick={() => setActiveType('shopping')}
             className="flex items-center gap-3.5 p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/60 transition-all text-left group"
           >
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
               <ShoppingCart className="w-5 h-5" />
             </div>
             <div>
@@ -216,6 +246,21 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
               <div className="text-xs text-muted-foreground">{t.quickAdd.shoppingDesc}</div>
             </div>
           </button>
+
+          {!isChild && (
+            <button
+              onClick={() => setActiveType('income')}
+              className="flex items-center gap-3.5 p-3.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all text-left group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-foreground">บันทึกรายรับ (Income)</div>
+                <div className="text-xs text-muted-foreground">บันทึกเงินเดือน, วิ่ง Grab, ค่าเช่าบ้าน/รถ หรือรายได้เสริม</div>
+              </div>
+            </button>
+          )}
 
           {!isChild && (
             <button
@@ -278,7 +323,6 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                     <Calendar className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="date"
-                      required
                       value={eventDate}
                       onChange={(e) => setEventDate(e.target.value)}
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
@@ -288,7 +332,7 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">{t.calendar.startTime}</label>
                   <div className="relative">
-                    <Clock className="w-4 h-4 text-sky-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Clock className="w-4 h-4 text-primary absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="time"
                       value={eventStartTime}
@@ -416,6 +460,70 @@ export function QuickAddModal({ isOpen, onClose, onSuccess, defaultType = null }
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeType === 'income' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">จำนวนเงินที่ได้รับ (บาท) *</label>
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  placeholder="0.00"
+                  value={incomeAmount}
+                  onChange={(e) => setIncomeAmount(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-emerald-500/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-lg text-emerald-600 dark:text-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">ชื่อแหล่งรายได้ *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น เงินเดือนประจำ บ.xxx, Grab ส่งพัสดุ, ค่าเช่าบ้าน"
+                  value={incomeSourceName}
+                  onChange={(e) => setIncomeSourceName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">ประเภทรายได้</label>
+                  <select
+                    value={incomeSourceType}
+                    onChange={(e) => setIncomeSourceType(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="SALARY">💼 เงินเดือนประจำ</option>
+                    <option value="SIDE_JOB">🛵 Grab / งานเสริม</option>
+                    <option value="RENTAL">🏠 ค่าเช่าทรัพย์สิน</option>
+                    <option value="BUSINESS">🏢 ธุรกิจ / ค้าขาย</option>
+                    <option value="OTHER">อื่นๆ</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">วันที่รับเงิน *</label>
+                  <input
+                    type="date"
+                    required
+                    value={incomeDate}
+                    onChange={(e) => setIncomeDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">บันทึกเพิ่มเติม (ถ้ามี)</label>
+                <input
+                  type="text"
+                  placeholder="เช่น โอนเข้าบัญชี SCB, วิ่ง 15 เที่ยว"
+                  value={incomeNote}
+                  onChange={(e) => setIncomeNote(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
             </div>
           )}

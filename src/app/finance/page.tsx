@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Wallet,
+  CheckCircle2,
+  Info,
   TrendingUp,
   TrendingDown,
   DollarSign,
@@ -69,6 +71,16 @@ export default function FinancePage() {
   const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null);
   const [deletingDebtId, setDeletingDebtId] = useState<string | null>(null);
 
+  // Cross-month statistics & Toast
+  const [allTimeIncomesCount, setAllTimeIncomesCount] = useState(0);
+  const [distinctIncomeMonths, setDistinctIncomeMonths] = useState<{ month: string; count: number }[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   // Form States - Income
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
   const [incomeAmount, setIncomeAmount] = useState('');
@@ -121,16 +133,24 @@ export default function FinancePage() {
   const fetchFinanceData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/finance?month=${selectedMonth}`);
+      const res = await fetch(`/api/finance?month=${selectedMonth}&_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       if (res.ok) {
         const data = await res.json();
         setSummary(data.summary);
         setIncomes(data.incomes || []);
         setDebts(data.debts || []);
         setRecentDebtPayments(data.recentDebtPayments || []);
+        setAllTimeIncomesCount(data.allTimeIncomesCount || 0);
+        setDistinctIncomeMonths(data.distinctIncomeMonths || []);
       }
 
-      const memRes = await fetch('/api/families/members');
+      const memRes = await fetch('/api/families/members', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       if (memRes.ok) {
         const memData = await memRes.json();
         setFamilyMembers(memData.members || []);
@@ -148,13 +168,15 @@ export default function FinancePage() {
 
   // Month navigation
   const handlePrevMonth = () => {
-    const [y, m] = selectedMonth.split('-').map(Number);
+    const baseMonth = selectedMonth === 'ALL' ? getTodayDateString().substring(0, 7) : selectedMonth;
+    const [y, m] = baseMonth.split('-').map(Number);
     const prevDate = new Date(y, m - 2, 1);
     setSelectedMonth(`${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`);
   };
 
   const handleNextMonth = () => {
-    const [y, m] = selectedMonth.split('-').map(Number);
+    const baseMonth = selectedMonth === 'ALL' ? getTodayDateString().substring(0, 7) : selectedMonth;
+    const [y, m] = baseMonth.split('-').map(Number);
     const nextDate = new Date(y, m, 1);
     setSelectedMonth(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`);
   };
@@ -170,7 +192,12 @@ export default function FinancePage() {
     setIncomeAmount('');
     setIncomeSourceType(preset?.type || 'SALARY');
     setIncomeSourceName(preset?.name || '');
-    setIncomeDate(getTodayDateString());
+
+    let defaultDate = getTodayDateString();
+    if (selectedMonth !== 'ALL' && !defaultDate.startsWith(selectedMonth)) {
+      defaultDate = `${selectedMonth}-01`;
+    }
+    setIncomeDate(defaultDate);
     setIncomeReceivedBy(member?.id || familyMembers[0]?.id || '');
     setIncomeAssetId(preset?.assetId || '');
     setIncomeNote('');
@@ -214,15 +241,27 @@ export default function FinancePage() {
         body: JSON.stringify(payload),
       });
 
+      const resData = await res.json();
       if (res.ok) {
+        if (resData.income) {
+          setIncomes((prev) => [resData.income, ...prev.filter((i) => i.id !== resData.income.id)]);
+        }
         setIsIncomeModalOpen(false);
+
+        const targetMonth = incomeDate.substring(0, 7);
+        if (selectedMonth !== 'ALL' && selectedMonth !== targetMonth) {
+          setSelectedMonth(targetMonth);
+          showToast(`✨ บันทึกรายรับสำเร็จ (สลับไปยังเดือน ${targetMonth} เรียบร้อย)`);
+        } else {
+          showToast('✨ บันทึกรายรับสำเร็จ เรียบร้อยแล้ว');
+        }
         fetchFinanceData();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to save income');
+        alert(resData.error || 'Failed to save income');
       }
     } catch (err) {
       console.error(err);
+      alert('เกิดข้อผิดพลาดในการบันทึกรายรับ');
     } finally {
       setIsSaving(false);
     }
@@ -234,7 +273,9 @@ export default function FinancePage() {
     try {
       const res = await fetch(`/api/incomes?id=${deletingIncomeId}`, { method: 'DELETE' });
       if (res.ok) {
+        setIncomes((prev) => prev.filter((i) => i.id !== deletingIncomeId));
         setDeletingIncomeId(null);
+        showToast('ลบรายการรายรับเรียบร้อยแล้ว');
         fetchFinanceData();
       }
     } catch (err) {
@@ -266,16 +307,27 @@ export default function FinancePage() {
         }),
       });
 
+      const resData = await res.json();
       if (res.ok) {
+        if (resData.income) {
+          setIncomes((prev) => [resData.income, ...prev.filter((i) => i.id !== resData.income.id)]);
+        }
         setIsGrabModalOpen(false);
         setGrabAmount('');
         setGrabTrips('');
         setGrabFuelCost('');
         setGrabNote('');
+
+        const targetMonth = grabDate.substring(0, 7);
+        if (selectedMonth !== 'ALL' && selectedMonth !== targetMonth) {
+          setSelectedMonth(targetMonth);
+          showToast(`🛵 บันทึก Grab Express สำเร็จ (สลับไปยังเดือน ${targetMonth} เรียบร้อย)`);
+        } else {
+          showToast('🛵 บันทึกรายได้ Grab Express สำเร็จ เรียบร้อยแล้ว');
+        }
         fetchFinanceData();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to save Grab log');
+        alert(resData.error || 'Failed to save Grab log');
       }
     } catch (err) {
       console.error(err);
@@ -496,28 +548,55 @@ export default function FinancePage() {
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Month Selector */}
           <div className="flex items-center gap-1 bg-card border border-border/80 rounded-2xl p-1 shadow-2xs">
+            {selectedMonth !== 'ALL' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="เดือนก่อนหน้า"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCurrentMonth}
+                  className="px-2.5 py-1 rounded-xl text-xs font-extrabold hover:bg-muted text-foreground transition-colors"
+                  title="คลิกเพื่อกลับมาเดือนปัจจุบัน"
+                >
+                  {selectedMonth}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="เดือนถัดไป"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <span className="px-3 py-1 text-xs font-extrabold text-primary">
+                📅 ทุกช่วงเวลา (All Months)
+              </span>
+            )}
+
             <button
               type="button"
-              onClick={handlePrevMonth}
-              className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title="เดือนก่อนหน้า"
+              onClick={() => {
+                if (selectedMonth === 'ALL') {
+                  handleCurrentMonth();
+                } else {
+                  setSelectedMonth('ALL');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                selectedMonth === 'ALL'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
             >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleCurrentMonth}
-              className="px-2.5 py-1 rounded-xl text-xs font-extrabold hover:bg-muted text-foreground transition-colors"
-            >
-              {selectedMonth}
-            </button>
-            <button
-              type="button"
-              onClick={handleNextMonth}
-              className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title="เดือนถัดไป"
-            >
-              <ChevronRight className="w-4 h-4" />
+              {selectedMonth === 'ALL' ? 'สลับดูรายเดือน' : 'ดูทุกเดือน'}
             </button>
           </div>
 
@@ -1151,10 +1230,45 @@ export default function FinancePage() {
               </div>
 
               {filteredIncomes.length === 0 ? (
-                <div className="p-8 rounded-3xl bg-card border border-border/80 text-center space-y-2">
-                  <p className="text-sm font-bold text-foreground">ยังไม่มีรายการรายรับในหมวดนี้</p>
-                  <p className="text-xs text-muted-foreground">แตะที่ปุ่ม "เพิ่มรายรับ" เพื่อเริ่มบันทึกเงินเดือนหรือรายได้เสริม</p>
-                </div>
+                allTimeIncomesCount > 0 && selectedMonth !== 'ALL' ? (
+                  <div className="p-6 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-foreground space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                        <Info className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-foreground">ไม่พบรายการรายรับในเดือน {selectedMonth}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          แต่คุณมีข้อมูลรายรับที่บันทึกไว้ในระบบทั้งหมด <strong>{allTimeIncomesCount}</strong> รายการ
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-500/20">
+                      {distinctIncomeMonths.map((m) => (
+                        <button
+                          key={m.month}
+                          type="button"
+                          onClick={() => setSelectedMonth(m.month)}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-bold transition-all active:scale-95"
+                        >
+                          📅 สลับไปดูเดือน {m.month} ({m.count} รายการ)
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMonth('ALL')}
+                        className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:bg-primary/90 transition-all active:scale-95"
+                      >
+                        👀 แสดงรายรับทุกเดือนทั้งหมด
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 rounded-3xl bg-card border border-border/80 text-center space-y-2">
+                    <p className="text-sm font-bold text-foreground">ยังไม่มีรายการรายรับในหมวดนี้</p>
+                    <p className="text-xs text-muted-foreground">แตะที่ปุ่ม "เพิ่มรายรับ" เพื่อเริ่มบันทึกเงินเดือนหรือรายได้เสริม</p>
+                  </div>
+                )
               ) : (
                 <div className="space-y-2">
                   {filteredIncomes.map((inc) => (
