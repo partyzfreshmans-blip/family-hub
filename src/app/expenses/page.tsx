@@ -102,6 +102,7 @@ export default function ExpensesPage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [isCompressingImage, setIsCompressingImage] = useState(false);
+  const [isDraggingExpenseImage, setIsDraggingExpenseImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -196,8 +197,7 @@ export default function ExpensesPage() {
     );
   };
 
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processExpenseImage = async (file: File) => {
     if (!file) return;
     try {
       setIsCompressingImage(true);
@@ -208,8 +208,15 @@ export default function ExpensesPage() {
       alert('ไม่สามารถประมวลผลรูปภาพได้');
     } finally {
       setIsCompressingImage(false);
-      e.target.value = '';
     }
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processExpenseImage(file);
+    }
+    e.target.value = '';
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -700,20 +707,58 @@ export default function ExpensesPage() {
                 </div>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border hover:border-primary/60 rounded-2xl cursor-pointer bg-muted/20 hover:bg-muted/40 transition-all text-center group">
+              <label
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingExpenseImage(true);
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingExpenseImage(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingExpenseImage(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingExpenseImage(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    processExpenseImage(file);
+                  }
+                }}
+                className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-2xl cursor-pointer transition-all text-center group select-none ${
+                  isDraggingExpenseImage
+                    ? 'border-primary bg-primary/15 scale-[1.02] shadow-lg shadow-primary/10 ring-4 ring-primary/20'
+                    : 'border-border hover:border-primary/60 bg-muted/20 hover:bg-muted/40'
+                }`}
+              >
+                <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
                 {isCompressingImage ? (
                   <div className="flex items-center gap-2 text-xs font-bold text-primary py-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>กำลังประมวลผลและบีบอัดรูปภาพ...</span>
                   </div>
+                ) : isDraggingExpenseImage ? (
+                  <>
+                    <div className="w-10 h-10 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-1 shadow-md animate-bounce">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-black text-primary">วางรูปภาพที่นี่เพื่อแนบสลิป (Drop here)</span>
+                    <span className="text-[10px] text-primary/80 font-medium mt-0.5">ปล่อยไฟล์รูปภาพเพื่อบันทึก</span>
+                  </>
                 ) : (
                   <>
                     <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-1 group-hover:scale-105 transition-transform">
                       <Upload className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-bold text-foreground">แตะเพื่อแนบสลิป ใบเสร็จ หรือถ่ายรูปใหม่</span>
+                    <span className="text-xs font-bold text-foreground">ลากและวาง (Drag & Drop) หรือ แตะเพื่อแนบสลิป/ใบเสร็จ</span>
                     <span className="text-[10px] text-muted-foreground mt-0.5">JPG, PNG, WEBP (บีบอัดและปรับขนาดให้อัตโนมัติ)</span>
-                    <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
                   </>
                 )}
               </label>

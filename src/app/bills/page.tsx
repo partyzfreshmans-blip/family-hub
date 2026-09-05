@@ -109,6 +109,8 @@ export default function BillsPage() {
   const [payAttachmentName, setPayAttachmentName] = useState<string | null>(null);
   const [payAttachmentType, setPayAttachmentType] = useState<string | null>(null);
   const [isUploadingPayFile, setIsUploadingPayFile] = useState(false);
+  const [isDraggingBillAttachment, setIsDraggingBillAttachment] = useState(false);
+  const [isDraggingPaySlip, setIsDraggingPaySlip] = useState(false);
 
   const fetchBills = useCallback(async () => {
     try {
@@ -165,8 +167,7 @@ export default function BillsPage() {
     setIsAddModalOpen(true);
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processBillFile = async (file: File) => {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -201,12 +202,18 @@ export default function BillsPage() {
       alert('เกิดข้อผิดพลาดในการประมวลผลไฟล์');
     } finally {
       setIsUploadingFile(false);
-      e.target.value = '';
     }
   };
 
-  const handlePayFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (file) {
+      await processBillFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const processPayFile = async (file: File) => {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -241,8 +248,15 @@ export default function BillsPage() {
       alert('เกิดข้อผิดพลาดในการประมวลผลสลิป');
     } finally {
       setIsUploadingPayFile(false);
-      e.target.value = '';
     }
+  };
+
+  const handlePayFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processPayFile(file);
+    }
+    e.target.value = '';
   };
 
   const openPayModal = (b: Bill) => {
@@ -746,7 +760,37 @@ export default function BillsPage() {
                 </div>
               </div>
             ) : (
-              <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group">
+              <label
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingBillAttachment(true);
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingBillAttachment(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingBillAttachment(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingBillAttachment(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    processBillFile(file);
+                  }
+                }}
+                className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group select-none ${
+                  isDraggingBillAttachment
+                    ? 'border-primary bg-primary/15 scale-[1.02] shadow-lg shadow-primary/10 ring-4 ring-primary/20'
+                    : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                }`}
+              >
                 <input
                   type="file"
                   accept="image/*,application/pdf"
@@ -758,6 +802,20 @@ export default function BillsPage() {
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>กำลังประมวลผลไฟล์...</span>
                   </div>
+                ) : isDraggingBillAttachment ? (
+                  <>
+                    <div className="w-10 h-10 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md animate-bounce">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-black text-primary">
+                        วางไฟล์ที่นี่เพื่ออัปโหลด (Drop here)
+                      </p>
+                      <p className="text-[10px] text-primary/80 font-medium mt-0.5">
+                        ปล่อยไฟล์เพื่อแนบรูปบิลหรือ QR Code
+                      </p>
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
@@ -765,7 +823,7 @@ export default function BillsPage() {
                     </div>
                     <div className="text-center">
                       <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                        แตะเพื่อถ่ายรูป หรือ อัปโหลดรูปภาพ / PDF
+                        ลากและวาง (Drag & Drop) หรือ แตะเพื่อเลือกรูปภาพ / PDF
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         รองรับรูปบิล, QR Code พร้อมเพย์, หรือใบแจ้งหนี้ PDF (ไม่เกิน 5MB)
@@ -973,7 +1031,37 @@ export default function BillsPage() {
                   </div>
                 </div>
               ) : (
-                <label className="border-2 border-dashed border-border hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-2xl p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all group">
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingPaySlip(true);
+                  }}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingPaySlip(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingPaySlip(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingPaySlip(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      processPayFile(file);
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group select-none ${
+                    isDraggingPaySlip
+                      ? 'border-emerald-500 bg-emerald-500/15 scale-[1.02] shadow-lg shadow-emerald-500/10 ring-4 ring-emerald-500/20'
+                      : 'border-border hover:border-emerald-500/50 hover:bg-emerald-500/5'
+                  }`}
+                >
                   <input
                     type="file"
                     accept="image/*,application/pdf"
@@ -985,16 +1073,30 @@ export default function BillsPage() {
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>กำลังประมวลผลสลิป...</span>
                     </div>
+                  ) : isDraggingPaySlip ? (
+                    <>
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md animate-bounce">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                          วางไฟล์ที่นี่เพื่อแนบสลิปทันที (Drop slip here)
+                        </p>
+                        <p className="text-[10px] text-emerald-600/80 font-medium mt-0.5">
+                          ปล่อยไฟล์เพื่อเริ่มประมวลผลสลิปการโอนเงิน
+                        </p>
+                      </div>
+                    </>
                   ) : (
                     <>
-                      <div className="w-8 h-8 rounded-xl bg-muted group-hover:bg-emerald-500/10 flex items-center justify-center transition-colors">
-                        <Upload className="w-4 h-4 text-muted-foreground group-hover:text-emerald-600 transition-colors" />
+                      <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-emerald-500/10 flex items-center justify-center transition-colors">
+                        <Upload className="w-5 h-5 text-muted-foreground group-hover:text-emerald-600 transition-colors" />
                       </div>
                       <div className="text-center">
                         <p className="text-xs font-bold text-foreground group-hover:text-emerald-600 transition-colors">
-                          แตะเพื่อแนบสลิปการโอน หรือ ถ่ายรูปใบเสร็จ
+                          ลากและวาง (Drag & Drop) หรือ แตะเพื่อแนบสลิปการโอน
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
                           รูปภาพสลิปจากแอปธนาคาร หรือไฟล์ PDF (ไม่เกิน 5MB)
                         </p>
                       </div>

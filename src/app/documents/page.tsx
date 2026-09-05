@@ -211,6 +211,7 @@ export default function DocumentsPage() {
   const [formFileUrl, setFormFileUrl] = useState<string | null>(null);
   const [formFileName, setFormFileName] = useState<string | null>(null);
   const [formFileType, setFormFileType] = useState<string | null>(null);
+  const [isDraggingDocFile, setIsDraggingDocFile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
@@ -332,9 +333,7 @@ export default function DocumentsPage() {
     e.target.value = '';
   };
 
-  // Handle File / Scan Upload inside Form
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processDocFile = (file: File) => {
     if (!file) return;
 
     if (file.size > 8 * 1024 * 1024) {
@@ -351,6 +350,15 @@ export default function DocumentsPage() {
       setFormFileUrl(result);
     };
     reader.readAsDataURL(file);
+  };
+
+  // Handle File / Scan Upload inside Form
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processDocFile(file);
+    }
+    e.target.value = '';
   };
 
   // Submit Add / Edit
@@ -1838,24 +1846,72 @@ export default function DocumentsPage() {
                   </div>
                 </div>
               ) : (
-                <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group">
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingDocFile(true);
+                  }}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingDocFile(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingDocFile(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingDocFile(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      processDocFile(file);
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all select-none ${
+                    isDraggingDocFile
+                      ? 'border-primary bg-primary/15 scale-[1.02] shadow-lg shadow-primary/10 ring-4 ring-primary/20'
+                      : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                  }`}
+                >
                   <input
                     type="file"
                     accept="image/*,application/pdf"
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                    <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                      แตะเพื่อถ่ายรูป หรือ เลือกไฟล์รูปภาพ / PDF
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      รองรับไฟล์ JPG, PNG, PDF (ไม่เกิน 8MB)
-                    </p>
-                  </div>
+                  {isDraggingDocFile ? (
+                    <>
+                      <div className="w-10 h-10 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md animate-bounce">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-black text-primary">
+                          วางไฟล์ที่นี่เพื่ออัปโหลดเอกสาร (Drop here)
+                        </p>
+                        <p className="text-[10px] text-primary/80 font-medium mt-0.5">
+                          ปล่อยไฟล์เพื่อจัดเก็บเข้าคลังเอกสาร
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                        <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                          ลากและวาง (Drag & Drop) หรือ แตะเพื่อเลือกไฟล์เอกสาร
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          รองรับไฟล์ JPG, PNG, PDF (ไม่เกิน 8MB)
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </label>
               )}
             </div>

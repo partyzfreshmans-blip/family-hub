@@ -111,6 +111,7 @@ export default function FinancePage() {
   const [payDebtDate, setPayDebtDate] = useState(getTodayDateString());
   const [payDebtBy, setPayDebtBy] = useState(member?.id || '');
   const [payDebtSlipUrl, setPayDebtSlipUrl] = useState<string | null>(null);
+  const [isDraggingDebtSlip, setIsDraggingDebtSlip] = useState(false);
   const [payDebtRecordExpense, setPayDebtRecordExpense] = useState(true);
   const [payDebtNote, setPayDebtNote] = useState('');
 
@@ -395,9 +396,7 @@ export default function FinancePage() {
     setIsPayDebtModalOpen(true);
   };
 
-  // Handle Slip Upload
-  const handleSlipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processDebtSlip = async (file: File) => {
     if (!file) return;
     try {
       const compressed = await compressImage(file, 1280, 0.82);
@@ -405,6 +404,15 @@ export default function FinancePage() {
     } catch (err) {
       console.error('Image compression error:', err);
     }
+  };
+
+  // Handle Slip Upload
+  const handleSlipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processDebtSlip(file);
+    }
+    e.target.value = '';
   };
 
   // Submit Pay Debt
@@ -1768,15 +1776,72 @@ export default function FinancePage() {
                 </button>
               </div>
             ) : (
-              <label className="border-2 border-dashed border-border hover:border-primary/50 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors">
-                <Upload className="w-4 h-4 text-muted-foreground" />
-                <span className="text-xs font-bold text-muted-foreground">แตะเพื่อแนบสลิปจ่ายเงิน</span>
+              <label
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingDebtSlip(true);
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingDebtSlip(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingDebtSlip(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingDebtSlip(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    processDebtSlip(file);
+                  }
+                }}
+                className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all select-none ${
+                  isDraggingDebtSlip
+                    ? 'border-primary bg-primary/15 scale-[1.02] shadow-lg shadow-primary/10 ring-4 ring-primary/20'
+                    : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                }`}
+              >
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleSlipChange}
                   className="hidden"
                 />
+                {isDraggingDebtSlip ? (
+                  <>
+                    <div className="w-10 h-10 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md animate-bounce">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-black text-primary">
+                        วางไฟล์ที่นี่เพื่อแนบสลิปทันที (Drop slip here)
+                      </p>
+                      <p className="text-[10px] text-primary/80 font-medium mt-0.5">
+                        ปล่อยไฟล์เพื่อเริ่มประมวลผลสลิปการโอน
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                      <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                        ลากและวาง (Drag & Drop) หรือ แตะเพื่อแนบสลิปจ่ายเงิน
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        รูปภาพสลิปจากแอปธนาคาร (ไม่เกิน 5MB)
+                      </p>
+                    </div>
+                  </>
+                )}
               </label>
             )}
           </div>
