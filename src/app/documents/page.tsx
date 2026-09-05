@@ -118,8 +118,8 @@ const CATEGORY_INFO: Record<DocumentCategory, CategoryConfig> = {
     border: 'border-emerald-500/30',
     glow: 'hover:border-emerald-500/60 hover:shadow-emerald-500/10',
     assetTypeLabel: 'สมาชิกเจ้าของเอกสาร',
-    assetPlaceholder: 'เช่น พ่อ, แม่, น้องต้น, น้องเมย์',
-    defaultAssetPresets: ['พ่อ (สมศักดิ์)', 'แม่ (สุดา)', 'น้องต้น', 'น้องเมย์'],
+    assetPlaceholder: 'เช่น พ่อ, แม่, หรือชื่อสมาชิกในครอบครัว',
+    defaultAssetPresets: ['พ่อ', 'แม่', 'น้องต้น', 'น้องเมย์'],
     docTypePresets: [
       { title: 'บัตรประจำตัวประชาชน', docNumberHint: 'เลขประจำตัว 13 หลัก' },
       { title: 'หนังสือเดินทาง (Passport)', docNumberHint: 'Passport Number' },
@@ -1601,35 +1601,65 @@ export default function DocumentsPage() {
               {/* Quick suggestion chips for Asset / Sub-category */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
                 <span className="text-[10px] font-bold text-muted-foreground">แตะเพื่อเลือก:</span>
-                {/* 1. Existing Assets in Family */}
-                {Array.from(
-                  new Set(
-                    documents
-                      .filter((d) => d.category === formCategory && d.sub_category?.trim())
-                      .map((d) => d.sub_category!.trim())
-                  )
-                ).map((existingName) => (
-                  <button
-                    key={existingName}
-                    type="button"
-                    onClick={() => setFormSubCategory(existingName)}
-                    className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-extrabold border border-primary/20 transition-all active:scale-95"
-                  >
-                    ★ {existingName}
-                  </button>
-                ))}
+                {formCategory === 'PERSONAL' && familyMembers.length > 0 ? (
+                  // Dynamic real family members
+                  familyMembers.map((mem) => {
+                    const isSelected = formSubCategory === mem.nickname || formOwnerMemberId === mem.id;
+                    return (
+                      <button
+                        key={mem.id}
+                        type="button"
+                        onClick={() => {
+                          setFormSubCategory(mem.nickname);
+                          setFormOwnerMemberId(mem.id);
+                        }}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all active:scale-95 flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 shadow-xs ring-1 ring-emerald-500/30'
+                            : 'bg-muted/70 hover:bg-background text-foreground border-border/50'
+                        }`}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: mem.member_color || '#10b981' }}
+                        />
+                        <span>{mem.nickname}</span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <>
+                    {/* 1. Existing Assets in Family */}
+                    {Array.from(
+                      new Set(
+                        documents
+                          .filter((d) => d.category === formCategory && d.sub_category?.trim())
+                          .map((d) => d.sub_category!.trim())
+                      )
+                    ).map((existingName) => (
+                      <button
+                        key={existingName}
+                        type="button"
+                        onClick={() => setFormSubCategory(existingName)}
+                        className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-extrabold border border-primary/20 transition-all active:scale-95"
+                      >
+                        ★ {existingName}
+                      </button>
+                    ))}
 
-                {/* 2. Default presets */}
-                {CATEGORY_INFO[formCategory].defaultAssetPresets.map((preset, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setFormSubCategory(preset)}
-                    className="px-2 py-0.5 rounded-lg bg-muted hover:bg-background text-foreground text-[10px] font-bold border border-border/50 transition-all active:scale-95"
-                  >
-                    + {preset}
-                  </button>
-                ))}
+                    {/* 2. Default presets */}
+                    {CATEGORY_INFO[formCategory].defaultAssetPresets.map((preset, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setFormSubCategory(preset)}
+                        className="px-2 py-0.5 rounded-lg bg-muted hover:bg-background text-foreground text-[10px] font-bold border border-border/50 transition-all active:scale-95"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 
@@ -1706,7 +1736,18 @@ export default function DocumentsPage() {
                 </label>
                 <select
                   value={formOwnerMemberId}
-                  onChange={(e) => setFormOwnerMemberId(e.target.value)}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setFormOwnerMemberId(newId);
+                    if (formCategory === 'PERSONAL') {
+                      if (newId) {
+                        const mem = familyMembers.find((m) => m.id === newId);
+                        if (mem) setFormSubCategory(mem.nickname);
+                      } else {
+                        setFormSubCategory('');
+                      }
+                    }
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-2xl border border-border bg-background text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">🏠 ส่วนกลางของบ้าน</option>

@@ -18,8 +18,8 @@ export async function seedDatabase() {
 
     // 1. Create Users
     const users = [
-      { id: 'usr_dad', email: 'dad@familyhub.local', name: 'พ่อ (สมศักดิ์)' },
-      { id: 'usr_mom', email: 'mom@familyhub.local', name: 'แม่ (สุดา)' },
+      { id: 'usr_dad', email: 'dad@familyhub.local', name: 'พ่อ' },
+      { id: 'usr_mom', email: 'mom@familyhub.local', name: 'แม่' },
       { id: 'usr_ton', email: 'ton@familyhub.local', name: 'น้องต้น' },
       { id: 'usr_may', email: 'may@familyhub.local', name: 'น้องเมย์' },
     ];

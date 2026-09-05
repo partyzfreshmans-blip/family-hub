@@ -546,8 +546,8 @@ async function ensureTursoInitialized() {
         const familyId = 'fam_sukjai';
 
         const statements: any[] = [
-          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_dad', 'dad@familyhub.local', defaultPasswordHash, 'พ่อ (สมศักดิ์)', now, now] },
-          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_mom', 'mom@familyhub.local', defaultPasswordHash, 'แม่ (สุดา)', now, now] },
+          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_dad', 'dad@familyhub.local', defaultPasswordHash, 'พ่อ', now, now] },
+          { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_mom', 'mom@familyhub.local', defaultPasswordHash, 'แม่', now, now] },
           { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_ton', 'ton@familyhub.local', defaultPasswordHash, 'น้องต้น', now, now] },
           { sql: `INSERT OR REPLACE INTO users (id, email, password_hash, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)`, args: ['usr_may', 'may@familyhub.local', defaultPasswordHash, 'น้องเมย์', now, now] },
           { sql: `INSERT OR REPLACE INTO families (id, name, owner_id, currency, monthly_budget, rewards_enabled, avatar_icon, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: [familyId, 'ครอบครัวสุขใจ', 'usr_dad', 'THB', 25000, 1, 'home', now, now] },
@@ -694,8 +694,8 @@ function initLocalSeedIfEmpty(db: Database) {
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const users = [
-      { id: 'usr_dad', email: 'dad@familyhub.local', name: 'พ่อ (สมศักดิ์)' },
-      { id: 'usr_mom', email: 'mom@familyhub.local', name: 'แม่ (สุดา)' },
+      { id: 'usr_dad', email: 'dad@familyhub.local', name: 'พ่อ' },
+      { id: 'usr_mom', email: 'mom@familyhub.local', name: 'แม่' },
       { id: 'usr_ton', email: 'ton@familyhub.local', name: 'น้องต้น' },
       { id: 'usr_may', email: 'may@familyhub.local', name: 'น้องเมย์' },
     ];
