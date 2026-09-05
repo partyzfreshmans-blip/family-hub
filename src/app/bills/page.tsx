@@ -112,6 +112,14 @@ export default function BillsPage() {
   const [isDraggingBillAttachment, setIsDraggingBillAttachment] = useState(false);
   const [isDraggingPaySlip, setIsDraggingPaySlip] = useState(false);
 
+  // Upload Slip for Existing Payment Modal State
+  const [uploadingSlipPayment, setUploadingSlipPayment] = useState<BillPayment | null>(null);
+  const [retroSlipUrl, setRetroSlipUrl] = useState<string | null>(null);
+  const [retroSlipName, setRetroSlipName] = useState<string | null>(null);
+  const [retroSlipType, setRetroSlipType] = useState<string | null>(null);
+  const [isUploadingRetroSlip, setIsUploadingRetroSlip] = useState(false);
+  const [isDraggingRetroSlip, setIsDraggingRetroSlip] = useState(false);
+
   const fetchBills = useCallback(async () => {
     try {
       const res = await fetch('/api/bills');
@@ -269,6 +277,96 @@ export default function BillsPage() {
     setPayAttachmentName(null);
     setPayAttachmentType(null);
     setIsUploadingPayFile(false);
+  };
+
+  const openUploadSlipForPayment = (p: BillPayment) => {
+    setUploadingSlipPayment(p);
+    setRetroSlipUrl(p.attachment_url || p.image_url || null);
+    setRetroSlipName(p.attachment_name || null);
+    setRetroSlipType(p.attachment_type || null);
+    setIsUploadingRetroSlip(false);
+    setIsDraggingRetroSlip(false);
+  };
+
+  const processRetroSlipFile = async (file: File) => {
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
+      return;
+    }
+
+    setIsUploadingRetroSlip(true);
+    try {
+      if (file.type.startsWith('image/')) {
+        const compressed = await compressImage(file, 1280, 0.82);
+        setRetroSlipUrl(compressed);
+        setRetroSlipName(file.name);
+        setRetroSlipType('image');
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setRetroSlipUrl(reader.result as string);
+          setRetroSlipName(file.name);
+          setRetroSlipType(file.type || 'application/pdf');
+          setIsUploadingRetroSlip(false);
+        };
+        reader.onerror = () => {
+          alert('ไม่สามารถอ่านไฟล์ได้');
+          setIsUploadingRetroSlip(false);
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    } catch (err) {
+      console.error('Retro slip process error:', err);
+      alert('เกิดข้อผิดพลาดในการประมวลผลสลิป');
+    } finally {
+      setIsUploadingRetroSlip(false);
+    }
+  };
+
+  const handleRetroSlipSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processRetroSlipFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleSaveRetroSlip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadingSlipPayment || !retroSlipUrl) {
+      alert('กรุณาแนบสลิปการโอนเงินก่อนบันทึก');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/bills', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId: uploadingSlipPayment.id,
+          attachmentUrl: retroSlipUrl,
+          attachmentName: retroSlipName || 'สลิปการโอนเงิน',
+          attachmentType: retroSlipType || 'image/jpeg',
+        }),
+      });
+
+      if (res.ok) {
+        setUploadingSlipPayment(null);
+        await fetchBills();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'ไม่สามารถบันทึกสลิปได้');
+      }
+    } catch (err) {
+      console.error('Save retro slip error:', err);
+      alert('เกิดข้อผิดพลาดในการบันทึกสลิป');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -581,8 +679,12 @@ export default function BillsPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                            <CheckCircle className="w-5 h-5" />
+                          <div
+                            onClick={() => openUploadSlipForPayment(p)}
+                            className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center shrink-0 cursor-pointer transition-colors group/check"
+                            title="แตะเพื่อแนบสลิปการโอนเงิน"
+                          >
+                            <CheckCircle className="w-5 h-5 group-hover/check:scale-110 transition-transform" />
                           </div>
                         )}
 
@@ -600,21 +702,42 @@ export default function BillsPage() {
                           {formatCurrency(p.amount)}
                         </span>
 
-                        {slipUrl && (
+                        {slipUrl ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLightboxMedia({
+                                  url: slipUrl,
+                                  title: `สลิปการจ่าย: ${p.note || 'ชำระบิล'} (${formatCurrency(p.amount)})`,
+                                  isImage: isImageSlip,
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1 shadow-2xs"
+                              title="ดูหลักฐานการจ่าย"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline text-[11px]">ดูสลิป</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openUploadSlipForPayment(p)}
+                              className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              title="เปลี่ยนรูปสลิป"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() =>
-                              setLightboxMedia({
-                                url: slipUrl,
-                                title: `สลิปการจ่าย: ${p.note || 'ชำระบิล'} (${formatCurrency(p.amount)})`,
-                                isImage: isImageSlip,
-                              })
-                            }
-                            className="px-2.5 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1 shadow-2xs"
-                            title="ดูหลักฐานการจ่าย"
+                            onClick={() => openUploadSlipForPayment(p)}
+                            className="px-2.5 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all flex items-center gap-1 shadow-2xs border border-emerald-500/20 hover:border-emerald-500/40"
+                            title="อัปโหลดสลิปการโอนเงินย้อนหลัง"
                           >
-                            <ImageIcon className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline text-[11px]">ดูสลิป</span>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">+ แนบสลิป</span>
                           </button>
                         )}
 
@@ -1155,6 +1278,180 @@ export default function BillsPage() {
               </a>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Upload Retro Slip Modal */}
+      {uploadingSlipPayment && (
+        <Modal
+          isOpen={!!uploadingSlipPayment}
+          onClose={() => setUploadingSlipPayment(null)}
+          title="แนบสลิปการโอนเงิน (Payment Slip)"
+          maxWidth="md"
+        >
+          <form onSubmit={handleSaveRetroSlip} className="space-y-4">
+            {/* Summary card */}
+            <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-[11px]">รายการชำระ</span>
+                <span className="font-extrabold text-foreground">{uploadingSlipPayment.note || 'ชำระบิล'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-[11px]">ยอดเงิน</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                  {formatCurrency(uploadingSlipPayment.amount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-[11px]">วันที่จ่าย</span>
+                <span className="text-foreground">{formatThaiDate(uploadingSlipPayment.paid_date)}</span>
+              </div>
+              {uploadingSlipPayment.payer_nick && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-[11px]">จ่ายโดย</span>
+                  <span className="text-foreground">{uploadingSlipPayment.payer_nick}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Upload / Dropzone */}
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1.5">
+                รูปภาพสลิปหลักฐานการโอน *
+              </label>
+
+              {retroSlipUrl ? (
+                <div className="p-3 rounded-2xl bg-muted/30 border border-border flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <img
+                      src={retroSlipUrl}
+                      alt="Slip Preview"
+                      className="w-12 h-12 rounded-xl object-cover border border-border shrink-0 shadow-xs"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{retroSlipName || 'สลิปการโอนเงิน'}</p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">พร้อมบันทึกเข้าประวัติ</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-xl bg-background border border-border hover:bg-muted text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                      <span>เปลี่ยนรูป</span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleRetroSlipSelect}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRetroSlipUrl(null);
+                        setRetroSlipName(null);
+                        setRetroSlipType(null);
+                      }}
+                      className="p-2 rounded-xl bg-background border border-border hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 transition-colors"
+                      title="ลบสลิป"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingRetroSlip(true);
+                  }}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingRetroSlip(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingRetroSlip(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingRetroSlip(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      processRetroSlipFile(file);
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group select-none ${
+                    isDraggingRetroSlip
+                      ? 'border-emerald-500 bg-emerald-500/15 scale-[1.02] shadow-lg shadow-emerald-500/10 ring-4 ring-emerald-500/20'
+                      : 'border-border hover:border-emerald-500/50 hover:bg-emerald-500/5'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleRetroSlipSelect}
+                    className="hidden"
+                  />
+                  {isUploadingRetroSlip ? (
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 font-bold">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังประมวลผลสลิป...</span>
+                    </div>
+                  ) : isDraggingRetroSlip ? (
+                    <>
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md animate-bounce">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                          วางไฟล์ที่นี่เพื่อแนบสลิปทันที (Drop slip here)
+                        </p>
+                        <p className="text-[10px] text-emerald-600/80 font-medium mt-0.5">
+                          ปล่อยไฟล์เพื่อเริ่มประมวลผลสลิปการโอนเงิน
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-2xl bg-muted group-hover:bg-emerald-500/10 flex items-center justify-center transition-colors">
+                        <Upload className="w-5 h-5 text-muted-foreground group-hover:text-emerald-600 transition-colors" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-foreground group-hover:text-emerald-600 transition-colors">
+                          ลากและวาง (Drag & Drop) หรือ แตะเพื่อแนบสลิปการโอน
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          รูปภาพสลิปจากแอปธนาคาร หรือไฟล์ PDF (ไม่เกิน 5MB)
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </label>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/80">
+              <button
+                type="button"
+                onClick={() => setUploadingSlipPayment(null)}
+                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving || !retroSlipUrl}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Check className="w-4 h-4" />
+                <span>{isSaving ? 'กำลังบันทึก...' : 'บันทึกสลิป'}</span>
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 

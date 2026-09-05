@@ -272,6 +272,36 @@ async function runAudit() {
     assert(dadDeletePay.status === 200 && dadDeletePay.data.success, 'Admin (Dad) deletes Payment History record', 'Bills & Slips');
   }
 
+  // Test Retro Slip Upload: Pay bill without slip first, then upload slip later
+  const payBillNoSlip = await apiRequest('/api/bills', 'PATCH', {
+    id: testBillId,
+    markPaid: true,
+    amount: 500,
+    paidDate: todayStr,
+    paidBy: dadMe.data.member.id,
+    note: 'ชำระค่าไฟ (ยังไม่มีสลิป)',
+  }, dadCookie);
+  assert(payBillNoSlip.status === 200 && payBillNoSlip.data.paid, 'Dad pays bill without slip initially', 'Bills & Slips');
+
+  const billsAfterNoSlip = await apiRequest('/api/bills', 'GET', null, dadCookie);
+  const paymentToUpdate = billsAfterNoSlip.data.payments.find(p => p.amount === 500);
+  assert(paymentToUpdate && !paymentToUpdate.attachment_url, 'Payment record exists without slip initially', 'Bills & Slips');
+
+  // Upload retro slip to existing payment
+  const uploadRetroSlip = await apiRequest('/api/bills', 'PATCH', {
+    paymentId: paymentToUpdate.id,
+    attachmentUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    attachmentName: 'retro_slip_500.png',
+  }, dadCookie);
+  assert(uploadRetroSlip.status === 200 && uploadRetroSlip.data.success, 'Upload retro slip to existing payment without slip', 'Bills & Slips');
+
+  const billsAfterRetro = await apiRequest('/api/bills', 'GET', null, dadCookie);
+  const updatedPayment = billsAfterRetro.data.payments.find(p => p.id === paymentToUpdate.id);
+  assert(updatedPayment && updatedPayment.attachment_url, 'Payment now has attached slip after retro upload', 'Bills & Slips');
+
+  // Clean up
+  await apiRequest(`/api/bills?paymentId=${paymentToUpdate.id}`, 'DELETE', null, dadCookie);
+
   // -------------------------------------------------------------
   // 8. FAMILY VAULT DOCUMENTS & ASSET SUB-CATEGORIES
   // -------------------------------------------------------------

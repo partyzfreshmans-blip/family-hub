@@ -144,6 +144,47 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
+
+    // Update payment record (e.g. upload slip for past payment)
+    if (body.paymentId) {
+      const payment = await queryOne<BillPayment>(
+        'SELECT * FROM bill_payments WHERE id = ? AND family_id = ?',
+        [body.paymentId, ctx.family.id]
+      );
+      if (!payment) {
+        return NextResponse.json({ error: 'Payment record not found' }, { status: 404 });
+      }
+
+      const finalPayAttachmentUrl = body.attachmentUrl || body.attachment_url || body.imageUrl || null;
+      const finalPayAttachmentName = body.attachmentName || body.attachment_name || (finalPayAttachmentUrl ? 'สลิปการโอนเงิน' : null);
+      const finalPayAttachmentType = body.attachmentType || body.attachment_type || (finalPayAttachmentUrl ? 'image/jpeg' : null);
+
+      await execute(
+        `UPDATE bill_payments SET
+          attachment_url = ?, attachment_name = ?, attachment_type = ?, image_url = ?
+         WHERE id = ? AND family_id = ?`,
+        [
+          finalPayAttachmentUrl,
+          finalPayAttachmentName,
+          finalPayAttachmentType,
+          finalPayAttachmentUrl,
+          body.paymentId,
+          ctx.family.id,
+        ]
+      );
+
+      // Also update linked expense if image was added
+      if (finalPayAttachmentUrl) {
+        await execute(
+          `UPDATE expenses SET image_url = ?
+           WHERE family_id = ? AND amount = ? AND expense_date = ? AND description LIKE ? AND (image_url IS NULL OR image_url = '')`,
+          [finalPayAttachmentUrl, ctx.family.id, payment.amount, payment.paid_date, '%ชำระบิล%']
+        );
+      }
+
+      return NextResponse.json({ success: true, updatedPaymentId: body.paymentId });
+    }
+
     const { id, markPaid, paidBy, amount, paidDate, note, name, dueDate, recurrenceRule, status, notes, attachmentUrl, attachmentName, attachmentType, imageUrl } = body;
 
     if (!id) {
