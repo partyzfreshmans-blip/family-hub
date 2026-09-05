@@ -44,6 +44,10 @@ import {
   FolderCheck,
   ChevronRight,
   HelpCircle,
+  Scan,
+  RefreshCw,
+  Cpu,
+  Wand2,
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageContext';
 import { useAuth } from '@/components/AuthContext';
@@ -53,6 +57,8 @@ import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { EmptyState, LoadingSkeleton } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FamilyDocument, DocumentCategory, DocumentPrivacyLevel, FamilyMember } from '@/types';
+import { parseThaiDocumentHeuristics, runClientOcr, OcrDetectionResult } from '@/lib/ocr';
+import { formatThaiDate } from '@/lib/utils';
 
 interface CategoryConfig {
   label: string;
@@ -216,6 +222,13 @@ export default function DocumentsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
 
+  // OCR & AI Document Scanner States
+  const [isOcrScanning, setIsOcrScanning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrScanStatus, setOcrScanStatus] = useState<string>('');
+  const [ocrDetectedResult, setOcrDetectedResult] = useState<OcrDetectionResult | null>(null);
+  const currentRawFileRef = useRef<File | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -277,6 +290,11 @@ export default function DocumentsPage() {
     setFormFileName(null);
     setFormFileType(null);
     setFormError(null);
+    setOcrDetectedResult(null);
+    setIsOcrScanning(false);
+    setOcrProgress(0);
+    setOcrScanStatus('');
+    currentRawFileRef.current = null;
     setIsFormOpen(true);
   };
 
@@ -297,7 +315,87 @@ export default function DocumentsPage() {
     setFormFileName(doc.file_name || null);
     setFormFileType(doc.file_type || null);
     setFormError(null);
+    setOcrDetectedResult(null);
+    setIsOcrScanning(false);
+    setOcrProgress(0);
+    setOcrScanStatus('');
+    currentRawFileRef.current = null;
     setIsFormOpen(true);
+  };
+
+  // Run OCR Detection on image file
+  const runOcrDetection = async (fileOrBlob: File | Blob | null, base64DataUrl: string, fileMime?: string) => {
+    const mime = fileMime || (fileOrBlob && 'type' in fileOrBlob ? fileOrBlob.type : 'image/jpeg');
+    // Only run for images
+    if (!mime?.startsWith('image/') && !base64DataUrl.startsWith('data:image/')) {
+      return;
+    }
+
+    setIsOcrScanning(true);
+    setOcrProgress(20);
+    setOcrScanStatus('กำลังวิเคราะห์เอกสารด้วยระบบ AI OCR...');
+    setOcrDetectedResult(null);
+
+    try {
+      // 1. Try Server Multimodal OCR (Gemini Vision if API key present)
+      const res = await fetch('/api/documents/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64DataUrl,
+          mimeType: mime || 'image/jpeg',
+        }),
+      });
+
+      let detected: OcrDetectionResult | null = null;
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.source === 'gemini_ai' && json.detected) {
+          detected = json.detected;
+          setOcrProgress(100);
+          setOcrScanStatus('อ่านข้อมูลเอกสารด้วย AI สำเร็จ!');
+        } else if (json.fallbackToClient) {
+          // 2. Fallback to Client Tesseract OCR
+          setOcrScanStatus('กำลังเริ่ม Local OCR ประมวลผลบนเครื่อง...');
+          const rawText = await runClientOcr(fileOrBlob || base64DataUrl, (pct, statusText) => {
+            setOcrProgress(pct);
+            setOcrScanStatus(statusText);
+          });
+          detected = parseThaiDocumentHeuristics(rawText, familyMembers);
+        }
+      } else {
+        // Fallback to Client Tesseract OCR
+        setOcrScanStatus('กำลังเริ่ม Local OCR ประมวลผลบนเครื่อง...');
+        const rawText = await runClientOcr(fileOrBlob || base64DataUrl, (pct, statusText) => {
+          setOcrProgress(pct);
+          setOcrScanStatus(statusText);
+        });
+        detected = parseThaiDocumentHeuristics(rawText, familyMembers);
+      }
+
+      if (detected) {
+        setOcrDetectedResult(detected);
+
+        // Auto-fill form fields
+        if (detected.title) setFormTitle(detected.title);
+        if (detected.category) setFormCategory(detected.category);
+        if (detected.sub_category) setFormSubCategory(detected.sub_category);
+        if (detected.document_number) setFormDocNumber(detected.document_number);
+        if (detected.issuer) setFormIssuer(detected.issuer);
+        if (detected.issue_date) setFormIssueDate(detected.issue_date);
+        if (detected.expiry_date) setFormExpiryDate(detected.expiry_date);
+        if (detected.owner_member_id) setFormOwnerMemberId(detected.owner_member_id);
+        if (detected.notes && !formNotes) setFormNotes(detected.notes);
+
+        showToast('✨ ระบบ AI OCR อ่านข้อมูลสำเร็จและกรอกลงในแบบฟอร์มแล้ว');
+      }
+    } catch (err) {
+      console.warn('OCR processing error:', err);
+      showToast('ไม่สามารถสแกนข้อความอัตโนมัติได้ สามารถพิมพ์กรอกเองได้ตามปกติ');
+    } finally {
+      setIsOcrScanning(false);
+    }
   };
 
   // Handle Quick Scan Upload from Header
@@ -310,6 +408,7 @@ export default function DocumentsPage() {
       return;
     }
 
+    currentRawFileRef.current = file;
     const reader = new FileReader();
     reader.onloadend = () => {
       setEditingDoc(null);
@@ -323,11 +422,15 @@ export default function DocumentsPage() {
       setFormIssueDate('');
       setFormExpiryDate('');
       setFormNotes('');
-      setFormFileUrl(reader.result as string);
+      const dataUrl = reader.result as string;
+      setFormFileUrl(dataUrl);
       setFormFileName(file.name);
       setFormFileType(file.type);
       setFormError(null);
       setIsFormOpen(true);
+
+      // Trigger OCR
+      runOcrDetection(file, dataUrl);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -341,6 +444,7 @@ export default function DocumentsPage() {
       return;
     }
 
+    currentRawFileRef.current = file;
     setFormFileName(file.name);
     setFormFileType(file.type);
 
@@ -348,8 +452,17 @@ export default function DocumentsPage() {
     reader.onloadend = () => {
       const result = reader.result as string;
       setFormFileUrl(result);
+      // Trigger OCR
+      runOcrDetection(file, result);
     };
     reader.readAsDataURL(file);
+  };
+
+  // Re-scan current file with OCR
+  const handleReScanOcr = () => {
+    if (formFileUrl) {
+      runOcrDetection(currentRawFileRef.current, formFileUrl, formFileType || undefined);
+    }
   };
 
   // Handle File / Scan Upload inside Form
@@ -1551,6 +1664,84 @@ export default function DocumentsPage() {
               </div>
             )}
 
+            {/* AI OCR Scanning Active Progress Banner */}
+            {isOcrScanning && (
+              <div className="p-3.5 rounded-2xl bg-primary/10 border border-primary/30 flex items-center gap-3 animate-pulse shadow-xs">
+                <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Sparkles className="w-5 h-5 animate-spin" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-black text-primary flex items-center gap-1.5">
+                      <Scan className="w-4 h-4 animate-bounce" />
+                      <span>ระบบ AI OCR กำลังอ่านและวิเคราะห์ข้อมูลจากเอกสาร...</span>
+                    </p>
+                    <span className="text-[11px] font-mono font-bold text-primary">{ocrProgress}%</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                    {ocrScanStatus || 'กำลังประมวลผลข้อความ...'}
+                  </p>
+                  <div className="w-full bg-primary/20 rounded-full h-1.5 mt-2 overflow-hidden">
+                    <div
+                      className="bg-primary h-full transition-all duration-300 rounded-full"
+                      style={{ width: `${Math.max(ocrProgress, 10)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI OCR Success Result Card */}
+            {!isOcrScanning && ocrDetectedResult && (
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col gap-2 shadow-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                      ✨ AI OCR ตรวจพบข้อมูลและกรอกลงในฟอร์มแล้ว:
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReScanOcr}
+                    disabled={isOcrScanning}
+                    className="px-2.5 py-1 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>สแกนซ้ำ</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {ocrDetectedResult.title && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-extrabold flex items-center gap-1">
+                      🏷️ {ocrDetectedResult.title}
+                    </span>
+                  )}
+                  {ocrDetectedResult.document_number && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold font-mono">
+                      🔢 เลขที่: {ocrDetectedResult.document_number}
+                    </span>
+                  )}
+                  {ocrDetectedResult.issuer && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                      🏢 {ocrDetectedResult.issuer}
+                    </span>
+                  )}
+                  {ocrDetectedResult.expiry_date && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                      📅 หมดอายุ: {formatThaiDate(ocrDetectedResult.expiry_date)}
+                    </span>
+                  )}
+                  {ocrDetectedResult.owner_nickname && (
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                      👤 เจ้าของ: {ocrDetectedResult.owner_nickname}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Category Selection */}
             <div>
               <label className="block text-xs font-bold text-foreground mb-1.5">
@@ -1863,7 +2054,21 @@ export default function DocumentsPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <label className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                    <button
+                      type="button"
+                      onClick={handleReScanOcr}
+                      disabled={isOcrScanning}
+                      className="px-2.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      title="วิเคราะห์และอ่านข้อมูลเอกสารด้วย AI OCR อีกครั้ง"
+                    >
+                      {isOcrScanning ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-3.5 h-3.5 text-primary" />
+                      )}
+                      <span>สแกน OCR</span>
+                    </button>
+                    <label className="p-2 rounded-xl bg-background border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors" title="เปลี่ยนไฟล์">
                       <Upload className="w-4 h-4" />
                       <input
                         type="file"
@@ -1878,6 +2083,7 @@ export default function DocumentsPage() {
                         setFormFileUrl(null);
                         setFormFileName(null);
                         setFormFileType(null);
+                        setOcrDetectedResult(null);
                       }}
                       className="p-2 rounded-xl bg-background border border-border hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 transition-colors"
                       title="ลบไฟล์"
@@ -1931,10 +2137,10 @@ export default function DocumentsPage() {
                       </div>
                       <div className="text-center">
                         <p className="text-xs font-black text-primary">
-                          วางไฟล์ที่นี่เพื่ออัปโหลดเอกสาร (Drop here)
+                          วางไฟล์ที่นี่เพื่อสแกนด้วย OCR (Drop here)
                         </p>
                         <p className="text-[10px] text-primary/80 font-medium mt-0.5">
-                          ปล่อยไฟล์เพื่อจัดเก็บเข้าคลังเอกสาร
+                          ระบบจะอ่านและตรวจจับข้อมูลเอกสารให้อัตโนมัติ
                         </p>
                       </div>
                     </>
@@ -1944,11 +2150,12 @@ export default function DocumentsPage() {
                         <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                       <div className="text-center">
-                        <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                          ลากและวาง (Drag & Drop) หรือ แตะเพื่อเลือกไฟล์เอกสาร
+                        <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors flex items-center justify-center gap-1.5">
+                          <Scan className="w-3.5 h-3.5 text-primary" />
+                          <span>ลากและวาง (Drag & Drop) หรือ แตะเพื่อเลือกไฟล์เอกสาร</span>
                         </p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">
-                          รองรับไฟล์ JPG, PNG, PDF (ไม่เกิน 8MB)
+                          ✨ มีระบบ AI OCR ช่วยตรวจจับข้อมูลเอกสารให้อัตโนมัติ (JPG, PNG, PDF)
                         </p>
                       </div>
                     </>

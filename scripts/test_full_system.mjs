@@ -353,6 +353,31 @@ async function runAudit() {
   assert(docsRes.status === 200 && docsRes.data.documents.length >= 3, 'Mom views all Family Vault documents', 'Documents');
   assert(docsRes.data.categoryCounts?.VEHICLE >= 1 && docsRes.data.categoryCounts?.HOUSE >= 1, 'Document category counts accurately calculated', 'Documents');
 
+  // 4. Test AI OCR Document Auto-Detection API
+  const ocrIdCardRes = await apiRequest('/api/documents/ocr', 'POST', {
+    rawText: 'บัตรประจำตัวประชาชน Thai National ID Card เลขประจำตัวประชาชน 1 1002 00456 78 9 ชื่อ นายสมศักดิ์ พ่อ สุขใจ วันออกบัตร 10 พ.ค. 2565 วันหมดอายุ 10 พ.ค. 2573',
+  }, dadCookie);
+  assert(
+    ocrIdCardRes.status === 200 &&
+    ocrIdCardRes.data.detected?.title === 'บัตรประจำตัวประชาชน' &&
+    ocrIdCardRes.data.detected?.document_number === '1-1002-00456-78-9' &&
+    ocrIdCardRes.data.detected?.owner_nickname === 'พ่อ',
+    'OCR API correctly detects Thai National ID Card, 13-digit number & owner',
+    'Documents'
+  );
+
+  const ocrVehicleRes = await apiRequest('/api/documents/ocr', 'POST', {
+    rawText: 'ตารางกรมธรรม์ประกันภัยคุ้มครองผู้ประสบภัยจากรถ (พ.ร.บ.) บมจ.วิริยะประกันภัย เลขทะเบียน 1กข-9999 กทม. วันสิ้นสุดความคุ้มครอง 15/06/2569',
+  }, dadCookie);
+  assert(
+    ocrVehicleRes.status === 200 &&
+    ocrVehicleRes.data.detected?.category === 'VEHICLE' &&
+    ocrVehicleRes.data.detected?.sub_category === '1กข-9999 กทม.' &&
+    ocrVehicleRes.data.detected?.issuer === 'บมจ.วิริยะประกันภัย',
+    'OCR API correctly detects Vehicle PRB, License plate & Insurance company',
+    'Documents'
+  );
+
   // -------------------------------------------------------------
   // 9. LOCATION & SOS EMERGENCY
   // -------------------------------------------------------------
